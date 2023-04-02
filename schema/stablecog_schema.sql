@@ -1,3 +1,6 @@
+CREATE SCHEMA auth;
+CREATE SCHEMA extensions;
+
 CREATE extension IF NOT EXISTS moddatetime schema extensions;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema extensions;
 
@@ -70,7 +73,7 @@ CREATE TABLE public.credit_types (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.credit_types FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.credit_types FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.credit_types OWNER TO postgres;
 
@@ -93,7 +96,7 @@ CREATE TABLE public.credits (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.credits FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.credits FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.credits OWNER TO postgres;
 
@@ -112,7 +115,7 @@ CREATE TABLE public.device_info (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.device_info FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.device_info FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.device_info OWNER TO postgres;
 
@@ -129,7 +132,7 @@ CREATE TABLE public.generation_models (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.generation_models FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.generation_models FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.generation_models OWNER TO postgres;
 
@@ -143,7 +146,7 @@ CREATE TABLE public.generation_outputs (
     upscaled_image_path text,
     generation_id uuid NOT NULL,
     gallery_status public.generation_output_gallery_status_enum DEFAULT 'not_submitted'::public.generation_output_gallery_status_enum NOT NULL,
-    is_favorited DEFAULT false not null;
+    is_favorited bool DEFAULT false not null,
     deleted_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT (now() AT TIME ZONE 'utc'::text) NOT NULL,
     updated_at timestamp with time zone DEFAULT (now() AT TIME ZONE 'utc'::text) NOT NULL
@@ -151,7 +154,7 @@ CREATE TABLE public.generation_outputs (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.generation_outputs FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.generation_outputs FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.generation_outputs OWNER TO postgres;
 
@@ -189,7 +192,7 @@ CREATE TABLE public.generations (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.generations FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.generations FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.generations OWNER TO postgres;
 
@@ -207,7 +210,7 @@ CREATE TABLE public.negative_prompts (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.negative_prompts FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.negative_prompts FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.negative_prompts OWNER TO postgres;
 
@@ -224,7 +227,7 @@ CREATE TABLE public.prompts (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.prompts FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.prompts FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 
 ALTER TABLE public.prompts OWNER TO postgres;
@@ -242,7 +245,7 @@ CREATE TABLE public.schedulers (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.schedulers FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.schedulers FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.schedulers OWNER TO postgres;
 
@@ -259,7 +262,7 @@ CREATE TABLE public.upscale_models (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.upscale_models FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.upscale_models FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 
 ALTER TABLE public.upscale_models OWNER TO postgres;
@@ -281,7 +284,7 @@ CREATE TABLE public.upscale_outputs (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.upscale_outputs FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.upscale_outputs FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.upscale_outputs OWNER TO postgres;
 
@@ -310,7 +313,7 @@ CREATE TABLE public.upscales (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.upscales FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.upscales FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.upscales OWNER TO postgres;
 
@@ -328,7 +331,7 @@ CREATE TABLE public.user_roles (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.user_roles FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.user_roles FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 ALTER TABLE public.user_roles OWNER TO postgres;
 
@@ -341,6 +344,7 @@ CREATE TABLE public.users (
     email text NOT NULL,
     stripe_customer_id text NOT NULL,
     active_product_id text,
+    last_seen_at timestamp with time zone,
     last_sign_in_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -348,7 +352,7 @@ CREATE TABLE public.users (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.users FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.users FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 --
 -- Name: disposable_emails; Type: TABLE; Schema: public; Owner: postgres
@@ -363,7 +367,7 @@ CREATE TABLE public.disposable_emails (
 
 CREATE trigger handle_updated_at before
 UPDATE
-    ON public.disposable_emails FOR each ROW EXECUTE PROCEDURE moddatetime (updated_at);
+    ON public.disposable_emails FOR each ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 
 -- To update last_sign_in_at
@@ -380,10 +384,10 @@ return new;
 end;
 $$ language plpgsql security definer;
 
-create trigger on_auth_user_updated
-after
-update
-    on auth.users for each row execute procedure handle_updated_user();
+-- create trigger on_auth_user_updated
+-- after
+-- update
+--     on public.users for each row execute procedure handle_updated_user();
 
 ALTER TABLE public.users OWNER TO postgres;
 
@@ -617,7 +621,7 @@ ALTER TABLE ONLY public.credits
 --
 
 ALTER TABLE ONLY public.credits
-    ADD CONSTRAINT credits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+    ADD CONSTRAINT credits_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -673,7 +677,7 @@ ALTER TABLE ONLY public.generations
 --
 
 ALTER TABLE ONLY public.generations
-    ADD CONSTRAINT generations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+    ADD CONSTRAINT generations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -713,7 +717,7 @@ ALTER TABLE ONLY public.upscales
 --
 
 ALTER TABLE ONLY public.upscales
-    ADD CONSTRAINT upscales_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+    ADD CONSTRAINT upscales_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -721,7 +725,7 @@ ALTER TABLE ONLY public.upscales
 --
 
 ALTER TABLE ONLY public.user_roles
-    ADD CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+    ADD CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -729,14 +733,14 @@ ALTER TABLE ONLY public.user_roles
 --
 
 ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id);
+    ADD CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES public.users(id);
 
 
 --
 -- Name: users Users can select their own entry; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "Users can select their own entry" ON public.users FOR SELECT USING ((auth.uid() = id));
+-- CREATE POLICY "Users can select their own entry" ON public.users FOR SELECT USING ((extensions."uuid-ossp"() = id));
 
 
 --
