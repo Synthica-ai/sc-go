@@ -29,7 +29,12 @@ type QDrantClient struct {
 }
 
 func (q QDrantClient) RoundTrip(r *http.Request) (*http.Response, error) {
-	r.Header.Add("Authorization", "Basic "+q.token)
+	if strings.Contains(q.token, "Basic") {
+		r.Header.Add("Authorization", q.token)
+	} else {
+		r.Header.Add("api-key", q.token)
+	}
+
 	return q.r.RoundTrip(r)
 }
 
@@ -43,12 +48,16 @@ func NewQdrantClient(ctx context.Context) (*QDrantClient, error) {
 	// Split by comma
 	urls := strings.Split(urlEnv, ",")
 	// Token
-	auth := os.Getenv("QDRANT_USERNAME") + ":" + os.Getenv("QDRANT_PASSWORD")
+	auth := os.Getenv("QDRANT_TOKEN")
+	if auth == "" {
+		auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(os.Getenv("QDRANT_USERNAME")+":"+os.Getenv("QDRANT_PASSWORD")))
+	}
+
 	// Create client
 	qClient := &QDrantClient{
 		URLs:           urls,
 		ActiveUrl:      urls[0],
-		token:          base64.StdEncoding.EncodeToString([]byte(auth)),
+		token:          auth,
 		r:              http.DefaultTransport,
 		Ctx:            ctx,
 		CollectionName: utils.GetEnv("QDRANT_COLLECTION_NAME", "stablecog"),
