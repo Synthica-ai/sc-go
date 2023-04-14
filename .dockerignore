@@ -1,0 +1,9 @@
+Dockerfile
+.dockerignore
+.gcloudignore
+.git
+.gitignore
+README.md
+.vscode
+.github
+.data
