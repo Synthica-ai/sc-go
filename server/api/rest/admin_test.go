@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stablecog/sc-go/database/ent/generation"
@@ -174,7 +175,7 @@ func TestHandleQueryGenerationsForAdminDefaultParams(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 	assert.Equal(t, 200, resp.StatusCode)
-	var genResponse repository.GenerationQueryWithOutputsMeta
+	var genResponse repository.GenerationQueryWithOutputsMeta[*time.Time]
 	respBody, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(respBody, &genResponse)
 
@@ -261,7 +262,7 @@ func TestHandleQueryGenerationsAdminCursor(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 	assert.Equal(t, 200, resp.StatusCode)
-	var genResponse repository.GenerationQueryWithOutputsMeta
+	var genResponse repository.GenerationQueryWithOutputsMeta[*time.Time]
 	respBody, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(respBody, &genResponse)
 
@@ -297,7 +298,7 @@ func TestHandleQueryGenerationsAdminCursor(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, 200, resp.StatusCode)
 	respBody, _ = io.ReadAll(resp.Body)
-	genResponse = repository.GenerationQueryWithOutputsMeta{}
+	genResponse = repository.GenerationQueryWithOutputsMeta[*time.Time]{}
 	json.Unmarshal(respBody, &genResponse)
 
 	assert.Nil(t, genResponse.Total)
@@ -322,7 +323,7 @@ func TestHandleQueryGenerationsAdminPerPage(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 	assert.Equal(t, 200, resp.StatusCode)
-	var genResponse repository.GenerationQueryWithOutputsMeta
+	var genResponse repository.GenerationQueryWithOutputsMeta[*time.Time]
 	respBody, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(respBody, &genResponse)
 
@@ -361,7 +362,7 @@ func TestHandleQueryGenerationsAdminGalleryLevel(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 	assert.Equal(t, 200, resp.StatusCode)
-	var genResponse repository.GenerationQueryWithOutputsMeta
+	var genResponse repository.GenerationQueryWithOutputsMeta[*time.Time]
 	respBody, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(respBody, &genResponse)
 

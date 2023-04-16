@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 
@@ -32,10 +33,27 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	free := user.ActiveProductID == nil
-	qMax := shared.MAX_QUEUED_ITEMS_FREE
-	if !free {
-		qMax = shared.MAX_QUEUED_ITEMS_SUBSCRIBED
+	var qMax int
+	isSuperAdmin, _ := c.Repo.IsSuperAdmin(user.ID)
+	if isSuperAdmin {
+		qMax = math.MaxInt64
+	} else {
+		qMax = shared.MAX_QUEUED_ITEMS_FREE
+	}
+	if !isSuperAdmin && user.ActiveProductID != nil {
+		switch *user.ActiveProductID {
+		// Starter
+		case GetProductIDs()[1]:
+			qMax = shared.MAX_QUEUED_ITEMS_STARTER
+			// Pro
+		case GetProductIDs()[2]:
+			qMax = shared.MAX_QUEUED_ITEMS_PRO
+		// Ultimate
+		case GetProductIDs()[3]:
+			qMax = shared.MAX_QUEUED_ITEMS_ULTIMATE
+		default:
+			log.Warn("Unknown product ID", "product_id", *user.ActiveProductID)
+		}
 	}
 
 	// Validation
@@ -46,7 +64,11 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get queue count
-	if c.QueueThrottler.NumQueued(user.ID.String()) > qMax {
+	nq, err := c.QueueThrottler.NumQueued(user.ID.String())
+	if err != nil {
+		log.Warn("Error getting queue count for user", "err", err, "user_id", user.ID)
+	}
+	if err == nil && nq > qMax {
 		responses.ErrBadRequest(w, r, "queue_limit_reached", "")
 		return
 	}
@@ -206,7 +228,7 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		c.QueueThrottler.Increment(requestId, user.ID.String())
+		c.QueueThrottler.IncrementBy(1, user.ID.String())
 
 		return nil
 	}); err != nil {

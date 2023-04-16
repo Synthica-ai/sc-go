@@ -3,8 +3,10 @@ package shared
 import "time"
 
 // Max queued items allowed
-const MAX_QUEUED_ITEMS_SUBSCRIBED = 5
-const MAX_QUEUED_ITEMS_FREE = 1
+const MAX_QUEUED_ITEMS_ULTIMATE = 24
+const MAX_QUEUED_ITEMS_PRO = 16
+const MAX_QUEUED_ITEMS_STARTER = 8
+const MAX_QUEUED_ITEMS_FREE = 4
 
 // NSFW Error
 const NSFW_ERROR = "NSFW"
@@ -33,9 +35,6 @@ const MAX_PROMPT_LENGTH = 500
 
 // The name of the redis stream used to enqueue worker requests
 const COG_REDIS_QUEUE = "input_queue"
-
-// Redis channel for queue throttle updates
-const REDIS_QUEUE_THROTTLE_CHANNEL = "queue_throttle"
 
 // This redis channel our servers publish to when we want to broadcast SSE events to clients
 const REDIS_SSE_BROADCAST_CHANNEL = "sse:broadcast_channel"

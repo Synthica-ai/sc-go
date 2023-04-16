@@ -167,6 +167,19 @@ type PendingCogRequestRedis struct {
 	ID         uuid.UUID
 }
 
+func (r *RedisWrapper) XDelListOfIDs(ids []string) (deleted int64, err error) {
+	_, err = r.Client.XAck(r.Ctx, shared.COG_REDIS_QUEUE, shared.COG_REDIS_QUEUE, ids...).Result()
+	if err != nil {
+		log.Error("Error acking from redis", "err", err)
+		return 0, err
+	}
+	deleted, err = r.Client.XDel(r.Ctx, shared.COG_REDIS_QUEUE, ids...).Result()
+	if err != nil {
+		log.Error("Error deleting from redis", "err", err)
+	}
+	return deleted, err
+}
+
 // Keep track of request ID to cog, with stream ID of the client, for timeout tracking
 func (r *RedisWrapper) SetCogRequestStreamID(ctx context.Context, requestID string, streamID string) error {
 	_, err := r.Client.Set(ctx, requestID, streamID, 1*time.Hour).Result()
@@ -184,4 +197,41 @@ func (r *RedisWrapper) GetCogRequestStreamID(ctx context.Context, requestID stri
 // Delete the stream ID of the client for a given request ID
 func (r *RedisWrapper) DeleteCogRequestStreamID(ctx context.Context, requestID string) (int64, error) {
 	return r.Client.Del(ctx, requestID).Result()
+}
+
+// Caching embeddings
+func (r *RedisWrapper) CacheEmbeddings(ctx context.Context, key string, embedding []float32) error {
+	// Convert embedding to string
+	b, err := json.Marshal(embedding)
+	if err != nil {
+		log.Error("Error converting embedding to string", "err", err)
+		return err
+	}
+	// Set embedding in redis
+	err = r.Client.Set(ctx, key, b, 3*time.Minute).Err()
+	if err != nil {
+		log.Error("Error caching embedding", "err", err)
+		return err
+	}
+	return nil
+}
+
+// Retrieve from cache
+func (r *RedisWrapper) GetEmbeddings(ctx context.Context, key string) ([]float32, error) {
+	// Get embedding from redis
+	b, err := r.Client.Get(ctx, key).Bytes()
+	if err != nil {
+		if err != redis.Nil {
+			log.Error("Error getting embedding from cache", "err", err)
+		}
+		return nil, err
+	}
+	// Convert string to embedding
+	var embedding []float32
+	err = json.Unmarshal(b, &embedding)
+	if err != nil {
+		log.Error("Error converting embedding string to embedding", "err", err)
+		return nil, err
+	}
+	return embedding, nil
 }

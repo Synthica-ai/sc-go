@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -42,9 +43,27 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 		free = count <= 0
 	}
 
-	qMax := shared.MAX_QUEUED_ITEMS_FREE
-	if !free {
-		qMax = shared.MAX_QUEUED_ITEMS_SUBSCRIBED
+	var qMax int
+	isSuperAdmin, _ := c.Repo.IsSuperAdmin(user.ID)
+	if isSuperAdmin {
+		qMax = math.MaxInt64
+	} else {
+		qMax = shared.MAX_QUEUED_ITEMS_FREE
+	}
+	if !isSuperAdmin && user.ActiveProductID != nil {
+		switch *user.ActiveProductID {
+		// Starter
+		case GetProductIDs()[1]:
+			qMax = shared.MAX_QUEUED_ITEMS_STARTER
+			// Pro
+		case GetProductIDs()[2]:
+			qMax = shared.MAX_QUEUED_ITEMS_PRO
+		// Ultimate
+		case GetProductIDs()[3]:
+			qMax = shared.MAX_QUEUED_ITEMS_ULTIMATE
+		default:
+			log.Warn("Unknown product ID", "product_id", *user.ActiveProductID)
+		}
 		// // Get product level
 		// for level, product := range GetProductIDs() {
 		// 	if product == *user.ActiveProductID {
@@ -117,7 +136,11 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get queue count
-	if c.QueueThrottler.NumQueued(user.ID.String()) > qMax {
+	nq, err := c.QueueThrottler.NumQueued(user.ID.String())
+	if err != nil {
+		log.Warn("Error getting queue count", "err", err, "user_id", user.ID.String())
+	}
+	if err == nil && nq > qMax {
 		responses.ErrBadRequest(w, r, "queue_limit_reached", "")
 		return
 	}
@@ -259,7 +282,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 			return err
 		}
 
-		c.QueueThrottler.Increment(requestId, user.ID.String())
+		c.QueueThrottler.IncrementBy(int(generateReq.NumOutputs), user.ID.String())
 		return nil
 	}); err != nil {
 		log.Error("Error in transaction", "err", err)

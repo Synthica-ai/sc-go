@@ -31,16 +31,18 @@ func (r *Repository) FailCogMessageDueToTimeoutIfTimedOut(msg requests.CogWebhoo
 
 	// Dec queue count
 	if msg.Input.UserID != nil {
-		unthrottleMsg := UnthrottleUserResponse{
-			RequestID: msg.Input.ID,
-			UserID:    msg.Input.UserID.String(),
+		// Parse num
+		numOutputs := 1
+		if msg.Input.ProcessType != shared.UPSCALE {
+			// Parse as int
+			numOutputs, err = strconv.Atoi(msg.Input.NumOutputs)
+			if err != nil {
+				log.Error("Error parsing num outputs", "err", err)
+			}
 		}
-		respBytes, err := json.Marshal(unthrottleMsg)
+		err := r.QueueThrottler.DecrementBy(numOutputs, msg.Input.UserID.String())
 		if err != nil {
-			log.Error("Error marshalling unthrottle response", "err", err)
-		} else {
-			// Broadcast to all clients subcribed to this stream
-			r.Redis.Client.Publish(r.Redis.Ctx, shared.REDIS_QUEUE_THROTTLE_CHANNEL, respBytes)
+			log.Error("Error decrementing queue count", "err", err, "user", msg.Input.UserID.String())
 		}
 	}
 
@@ -327,9 +329,9 @@ func (r *Repository) ProcessCogMessage(msg requests.CogWebhookMessage) error {
 		imageUrl := utils.GetURLFromImagePath(upscaleOutput.ImagePath)
 		resp.Outputs = []GenerationUpscaleOutput{
 			{
-				ID:            upscaleOutput.ID,
-				ImageUrl:      imageUrl,
-				InputImageUrl: msg.Input.Image,
+				ID:           upscaleOutput.ID,
+				ImageUrl:     imageUrl,
+				InitImageUrl: msg.Input.Image,
 			},
 		}
 		outputId, err := uuid.Parse(msg.Input.GenerationOutputID)
@@ -364,16 +366,17 @@ func (r *Repository) ProcessCogMessage(msg requests.CogWebhookMessage) error {
 
 	// Dec queue count
 	if msg.Input.UserID != nil && (msg.Status == requests.CogSucceeded || msg.Status == requests.CogFailed) {
-		unthrottleMsg := UnthrottleUserResponse{
-			RequestID: msg.Input.ID,
-			UserID:    msg.Input.UserID.String(),
+		numOutputs := 1
+		if msg.Input.ProcessType != shared.UPSCALE {
+			// Parse as int
+			numOutputs, err = strconv.Atoi(msg.Input.NumOutputs)
+			if err != nil {
+				log.Error("Error parsing num outputs", "err", err)
+			}
 		}
-		respBytes, err := json.Marshal(unthrottleMsg)
+		err := r.QueueThrottler.DecrementBy(numOutputs, msg.Input.UserID.String())
 		if err != nil {
-			return err
-		} else {
-			// Broadcast to all clients subcribed to this stream
-			r.Redis.Client.Publish(r.Redis.Ctx, shared.REDIS_QUEUE_THROTTLE_CHANNEL, respBytes)
+			log.Error("Error decrementing queue count", "err", err, "user", msg.Input.UserID.String())
 		}
 	}
 

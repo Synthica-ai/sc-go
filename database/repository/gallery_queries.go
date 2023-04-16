@@ -12,6 +12,8 @@ import (
 	"github.com/stablecog/sc-go/database/ent/negativeprompt"
 	"github.com/stablecog/sc-go/database/ent/prompt"
 	"github.com/stablecog/sc-go/database/ent/scheduler"
+	"github.com/stablecog/sc-go/log"
+	"github.com/stablecog/sc-go/server/requests"
 	"github.com/stablecog/sc-go/utils"
 )
 
@@ -55,7 +57,7 @@ func (r *Repository) RetrieveGalleryData(limit int, updatedAtGT *time.Time) ([]G
 
 // Retrieved a single generation output by ID, in GalleryData format
 func (r *Repository) RetrieveGalleryDataByID(id uuid.UUID) (*GalleryData, error) {
-	output, err := r.DB.GenerationOutput.Query().Where(generationoutput.IDEQ(id)).WithGenerations(func(gq *ent.GenerationQuery) {
+	output, err := r.DB.GenerationOutput.Query().Where(generationoutput.IDEQ(id), generationoutput.GalleryStatusEQ(generationoutput.GalleryStatusApproved)).WithGenerations(func(gq *ent.GenerationQuery) {
 		gq.WithPrompt()
 		gq.WithNegativePrompt()
 	}).Only(r.Ctx)
@@ -91,19 +93,49 @@ func (r *Repository) RetrieveGalleryDataByID(id uuid.UUID) (*GalleryData, error)
 
 // Retrieves data in gallery format given  output IDs
 // Returns data, next cursor, error
-func (r *Repository) RetrieveMostRecentGalleryData(per_page int, cursor *time.Time) ([]GalleryData, *time.Time, error) {
-	q := r.DB.GenerationOutput.Query().Where(generationoutput.GalleryStatusEQ(generationoutput.GalleryStatusApproved))
+func (r *Repository) RetrieveMostRecentGalleryData(filters *requests.QueryGenerationFilters, per_page int, cursor *time.Time) ([]GalleryData, *time.Time, error) {
+	// Apply filters
+	queryG := r.DB.Generation.Query().Where(
+		generation.StatusEQ(generation.StatusSucceeded),
+	)
+	queryG = r.ApplyUserGenerationsFilters(queryG, filters, true)
+	query := queryG.QueryGenerationOutputs().Where(
+		generationoutput.DeletedAtIsNil(),
+	)
 	if cursor != nil {
-		q = q.Where(generationoutput.CreatedAtLT(*cursor))
+		query = query.Where(generationoutput.CreatedAtLT(*cursor))
 	}
-	res, err := q.
-		WithGenerations(func(gq *ent.GenerationQuery) {
-			gq.WithPrompt()
-			gq.WithNegativePrompt()
-		},
-		).Order(ent.Desc(generationoutput.FieldCreatedAt)).Limit(per_page + 1).All(r.Ctx)
+	if filters != nil {
+		if filters.UpscaleStatus == requests.UpscaleStatusNot {
+			query = query.Where(generationoutput.UpscaledImagePathIsNil())
+		}
+		if filters.UpscaleStatus == requests.UpscaleStatusOnly {
+			query = query.Where(generationoutput.UpscaledImagePathNotNil())
+		}
+		if len(filters.GalleryStatus) > 0 {
+			query = query.Where(generationoutput.GalleryStatusIn(filters.GalleryStatus...))
+		}
+	}
+	query = query.WithGenerations(func(s *ent.GenerationQuery) {
+		s.WithPrompt()
+		s.WithNegativePrompt()
+		s.WithGenerationOutputs()
+	})
+
+	// Limit
+	query = query.Order(ent.Desc(generationoutput.FieldCreatedAt)).Limit(per_page + 1)
+
+	res, err := query.All(r.Ctx)
+
 	if err != nil {
+		log.Errorf("Error retrieving gallery data: %v", err)
 		return nil, nil, err
+	}
+
+	var nextCursor *time.Time
+	if len(res) > per_page {
+		res = res[:len(res)-1]
+		nextCursor = &res[len(res)-1].CreatedAt
 	}
 
 	galleryData := make([]GalleryData, len(res))
@@ -134,12 +166,6 @@ func (r *Repository) RetrieveMostRecentGalleryData(per_page int, cursor *time.Ti
 			data.NegativePromptID = &output.Edges.Generations.Edges.NegativePrompt.ID
 		}
 		galleryData[i] = data
-	}
-
-	var nextCursor *time.Time
-	if len(galleryData) > per_page {
-		galleryData = galleryData[:len(galleryData)-1]
-		nextCursor = &galleryData[len(galleryData)-1].CreatedAt
 	}
 
 	return galleryData, nextCursor, nil
@@ -209,4 +235,5 @@ type GalleryData struct {
 	NegativePromptText string     `json:"negative_prompt_text,omitempty" sql:"negative_prompt_text"`
 	NegativePromptID   *uuid.UUID `json:"negative_prompt_id,omitempty" sql:"negative_prompt_id"`
 	UserID             *uuid.UUID `json:"user_id,omitempty" sql:"user_id"`
+	Score              *float32   `json:"score,omitempty" sql:"score"`
 }
