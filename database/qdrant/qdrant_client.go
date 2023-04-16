@@ -87,7 +87,7 @@ type QdrantClient struct {
 	CollectionName string
 }
 
-func (q QDrantClient) RoundTrip(r *http.Request) (*http.Response, error) {
+func (q QdrantClient) RoundTrip(r *http.Request) (*http.Response, error) {
 	if strings.Contains(q.token, "Basic") {
 		r.Header.Add("Authorization", q.token)
 	} else {
