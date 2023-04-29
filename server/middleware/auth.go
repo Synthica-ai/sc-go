@@ -3,7 +3,9 @@ package middleware
 import (
 	"context"
 	"crypto/subtle"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -24,16 +26,24 @@ const (
 func (m *Middleware) AuthMiddleware(level AuthLevel) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := strings.Split(r.Header.Get("Authorization"), "Bearer ")
-			if len(authHeader) != 2 {
-				responses.ErrUnauthorized(w, r)
-				return
-			}
-			// Check supabase to see if it's all good
-			userId, email, lastSignIn, err := m.SupabaseAuth.GetSupabaseUserIdFromAccessToken(authHeader[1])
-			if err != nil {
-				responses.ErrUnauthorized(w, r)
-				return
+			authToken := r.Header.Get("Authorization")
+
+			userId, email, lastSignIn := os.Getenv("DEV_ID"), os.Getenv("DEV_EMAIL"), &time.Time{}
+
+			if devKey, ok := os.LookupEnv("DEV_KEY"); !ok || !strings.Contains(authToken, fmt.Sprintf("DevKey %s", devKey)) {
+				authHeader := strings.Split(r.Header.Get("Authorization"), "Bearer ")
+				if len(authHeader) != 2 {
+					responses.ErrUnauthorized(w, r)
+					return
+				}
+
+				// Check supabase to see if it's all good
+				var err error
+				userId, email, lastSignIn, err = m.SupabaseAuth.GetSupabaseUserIdFromAccessToken(authHeader[1])
+				if err != nil {
+					responses.ErrUnauthorized(w, r)
+					return
+				}
 			}
 
 			// Set the user ID in the context
