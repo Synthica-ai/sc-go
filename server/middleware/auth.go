@@ -28,7 +28,7 @@ func (m *Middleware) AuthMiddleware(level AuthLevel) func(next http.Handler) htt
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authToken := r.Header.Get("Authorization")
 
-			userId, email, lastSignIn := os.Getenv("DEV_ID"), os.Getenv("DEV_EMAIL"), &time.Time{}
+			userId, email, lastSignIn := r.Header.Get("user_id"), r.Header.Get("user_email"), &time.Time{}
 
 			if devKey, ok := os.LookupEnv("DEV_KEY"); !ok || !strings.Contains(authToken, fmt.Sprintf("DevKey %s", devKey)) {
 				authHeader := strings.Split(r.Header.Get("Authorization"), "Bearer ")
