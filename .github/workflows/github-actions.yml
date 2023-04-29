@@ -48,4 +48,4 @@ jobs:
           PROJECT_ID: synthica
           APPLICATION_CREDENTIALS: '${{ secrets.GCP_SA_KEY }}'
         with:
-          args: compute instances update-container instance-1 --zone us-central1-a --container-image gcr.io/synthica/sc-go:${{ steps.short-sha.outputs.sha }}
+          args: compute instances update-container sc-go-instance --zone us-central1-a --container-image gcr.io/synthica/sc-go:${{ steps.short-sha.outputs.sha }}
