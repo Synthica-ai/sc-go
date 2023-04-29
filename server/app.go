@@ -218,6 +218,7 @@ func main() {
 	}
 
 	// Routes
+	app.Use(mw.CorsMiddleware())
 	app.Get("/", hc.HandleHealth)
 	app.Handle("/metrics", middleware.BasicAuth(promhttp.Handler(), "user", "password", "Authentication required"))
 	app.Get("/clipq", hc.HandleClipQSearch)

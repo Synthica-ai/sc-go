@@ -22,6 +22,21 @@ const (
 	AuthLevelSuperAdmin
 )
 
+func (m *Middleware) CorsMiddleware() func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if origin := os.Getenv("PUBLIC_CANONICAL_URL"); origin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "*")
+				w.Header().Set("Access-Control-Allow-Headers", "*")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // Enforces authorization at specific level
 func (m *Middleware) AuthMiddleware(level AuthLevel) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
