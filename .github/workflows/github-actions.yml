@@ -40,12 +40,12 @@ jobs:
           push: true
           context: .
           tags: |
-            gcr.io/rox-cloud/sc-go:latest
-            gcr.io/rox-cloud/sc-go:${{ steps.short-sha.outputs.sha }}
+            gcr.io/synthica/sc-go:latest
+            gcr.io/synthica/sc-go:${{ steps.short-sha.outputs.sha }}
 
       - uses: actions-hub/gcloud@master
         env:
-          PROJECT_ID: rox-cloud
+          PROJECT_ID: synthica
           APPLICATION_CREDENTIALS: '${{ secrets.GCP_SA_KEY }}'
         with:
-          args: compute instances update-container sc-server-instance --zone us-central1-a --container-image gcr.io/rox-cloud/sc-go:${{ steps.short-sha.outputs.sha }}
+          args: compute instances update-container instance-1 --zone us-central1-a --container-image gcr.io/synthica/sc-go:${{ steps.short-sha.outputs.sha }}
