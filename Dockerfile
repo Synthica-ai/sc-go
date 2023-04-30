@@ -8,8 +8,7 @@ ADD . /workspace
 
 WORKDIR /workspace
 
-RUN go build -o /app/bin/app ./server/ \
-    && cp .env /app
+RUN go build -o /app/bin/app ./server/
 
 FROM alpine
 
