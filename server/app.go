@@ -30,6 +30,7 @@ import (
 	"github.com/stablecog/sc-go/server/discord"
 	"github.com/stablecog/sc-go/server/middleware"
 	"github.com/stablecog/sc-go/shared"
+	"github.com/stablecog/sc-go/uploadapi/api"
 	"github.com/stablecog/sc-go/utils"
 	stripe "github.com/stripe/stripe-go/v74/client"
 	"golang.org/x/net/http2"
@@ -217,10 +218,29 @@ func main() {
 		Redis:        redis,
 	}
 
+	// Create controller
+	hu := api.Controller{
+		Repo:  repo,
+		Redis: redis,
+		S3:    s3Client,
+	}
+
 	// Routes
 	app.Get("/", hc.HandleHealth)
 	app.Handle("/metrics", middleware.BasicAuth(promhttp.Handler(), "user", "password", "Authentication required"))
 	app.Get("/clipq", hc.HandleClipQSearch)
+	app.Route("/upload", func(r chi.Router) {
+		// File upload
+		r.Route("/", func(r chi.Router) {
+			r.Get("/health", hc.HandleHealth)
+			r.Route("/", func(r chi.Router) {
+				r.Use(middleware.Logger)
+				r.Use(mw.RateLimit(2, 1*time.Second))
+				r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
+				r.Post("/", hu.HandleUpload)
+			})
+		})
+	})
 	app.Route("/v1", func(r chi.Router) {
 		r.Get("/health", hc.HandleHealth)
 
