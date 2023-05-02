@@ -128,7 +128,7 @@ func (r *Repository) SetGenerationSucceeded(generationID string, prompt string, 
 		// If this generation was created with "submit_to_gallery", then submit all outputs to gallery
 		var galleryStatus generationoutput.GalleryStatus
 		if g.WasAutoSubmitted {
-			galleryStatus = generationoutput.GalleryStatusSubmitted
+			galleryStatus = generationoutput.GalleryStatusApproved
 		} else {
 			galleryStatus = generationoutput.GalleryStatusNotSubmitted
 		}
