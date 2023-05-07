@@ -19,6 +19,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	chiprometheus "github.com/stablecog/chi-prometheus"
+	"github.com/stablecog/sc-go/cron/jobs"
 	"github.com/stablecog/sc-go/database"
 	"github.com/stablecog/sc-go/database/qdrant"
 	"github.com/stablecog/sc-go/database/repository"
@@ -198,6 +199,23 @@ func main() {
 	newSession := session.New(s3Config)
 	s3Client := s3.New(newSession)
 
+	jobRunner := jobs.JobRunner{
+		Repo:   repo,
+		Redis:  redis,
+		Ctx:    ctx,
+		Meili:  database.NewMeiliSearchClient(),
+		Track:  analyticsService,
+		Stripe: stripeClient,
+	}
+
+	err = jobRunner.SyncMeili(jobs.NewJobLogger("MEILI_SYNC"), 90000)
+	if err != nil {
+		log.Fatal("Error syncing meili", "err", err)
+		os.Exit(1)
+	}
+
+	s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 1000)
+
 	// Create controller
 	hc := rest.RestAPI{
 		Repo:           repo,
@@ -208,6 +226,7 @@ func main() {
 		QueueThrottler: qThrottler,
 		S3:             s3Client,
 		Qdrant:         qdrantClient,
+		Meili:          database.NewMeiliSearchClient(),
 		Clip:           clip.NewClipService(redis),
 	}
 
@@ -274,7 +293,7 @@ func main() {
 			r.Use(middleware.Logger)
 			// 20 requests per second
 			r.Use(mw.RateLimit(20, 1*time.Second))
-			r.Get("/", hc.HandleSemanticSearchGallery)
+			r.Get("/", hc.HandleQueryGallery)
 		})
 
 		// Routes that require authentication

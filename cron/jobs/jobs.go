@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/meilisearch/meilisearch-go"
 	"github.com/stablecog/sc-go/cron/discord"
 	"github.com/stablecog/sc-go/database"
 	"github.com/stablecog/sc-go/database/repository"
@@ -18,6 +19,7 @@ type JobRunner struct {
 	Ctx     context.Context
 	Discord *discord.DiscordHealthTracker
 	Track   *analytics.AnalyticsService
+	Meili   *meilisearch.Client
 	Stripe  *stripe.API
 }
 
