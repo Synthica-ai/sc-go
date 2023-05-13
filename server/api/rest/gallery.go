@@ -24,6 +24,8 @@ import (
 
 const GALLERY_PER_PAGE = 50
 
+var MAGIC_DATE = time.Date(2023, 01, 01, 0, 0, 0, 0, time.UTC)
+
 func (c *RestAPI) HandleSemanticSearchGallery(w http.ResponseWriter, r *http.Request) {
 	// Get output_id param
 	outputId := r.URL.Query().Get("output_id")
@@ -360,10 +362,15 @@ func (c *RestAPI) HandleQueryGallery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get query params
-	page, err := strconv.Atoi(r.URL.Query().Get("cursor"))
-	if err != nil || page < 1 {
-		page = 1
+	cursor := r.URL.Query().Get("cursor")
+	cursorDate, err := time.Parse(time.RFC3339Nano, cursor)
+
+	next := MAGIC_DATE
+	if err == nil && cursorDate.Nanosecond() == 0 {
+		next = cursorDate.Add(time.Second)
 	}
+
+	page := int(next.Sub(MAGIC_DATE).Seconds()) + 1
 
 	search := r.URL.Query().Get("search")
 
@@ -373,9 +380,8 @@ func (c *RestAPI) HandleQueryGallery(w http.ResponseWriter, r *http.Request) {
 		responses.ErrInternalServerError(w, r, "Error querying gallery")
 		return
 	}
-	next := 0
+
 	if len(generationGs) > GALLERY_PER_PAGE {
-		next = page + 1
 		generationGs = generationGs[:len(generationGs)-1]
 	}
 
@@ -419,8 +425,8 @@ func (c *RestAPI) HandleQueryGallery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, GalleryResponse[int]{
-		Next: next,
+	render.JSON(w, r, GalleryResponse[*time.Time]{
+		Next: &next,
 		Page: page,
 		Hits: generationGs,
 	})
