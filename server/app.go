@@ -208,7 +208,7 @@ func main() {
 		Stripe: stripeClient,
 	}
 
-	err = jobRunner.SyncMeili(jobs.NewJobLogger("MEILI_SYNC"), 160000)
+	err = jobRunner.SyncMeili(jobs.NewJobLogger("MEILI_SYNC"), 1000)
 	if err != nil {
 		log.Fatal("Error syncing meili", "err", err)
 		os.Exit(1)
