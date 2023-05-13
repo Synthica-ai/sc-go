@@ -208,13 +208,13 @@ func main() {
 		Stripe: stripeClient,
 	}
 
-	err = jobRunner.SyncMeili(jobs.NewJobLogger("MEILI_SYNC"), 90000)
+	err = jobRunner.SyncMeili(jobs.NewJobLogger("MEILI_SYNC"), 160000)
 	if err != nil {
 		log.Fatal("Error syncing meili", "err", err)
 		os.Exit(1)
 	}
 
-	s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 1000)
+	// s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 1000)
 
 	// Create controller
 	hc := rest.RestAPI{
