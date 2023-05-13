@@ -214,7 +214,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 1000)
+	s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 1000)
 
 	// Create controller
 	hc := rest.RestAPI{

@@ -28,8 +28,6 @@ func (j *JobRunner) SyncMeili(log Logger, limit int) error {
 		lastSyncGenUpdatedAtRef = &lastSyncedGenUpdatedAt
 	}
 
-	lastSyncGenUpdatedAtRef = nil
-
 	galleryItems, err := j.Repo.RetrieveGalleryData(limit, lastSyncGenUpdatedAtRef)
 
 	if err != nil {
