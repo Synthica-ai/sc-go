@@ -218,6 +218,12 @@ type GalleryResponse[T GalleryResponseCursor] struct {
 	Hits []repository.GalleryData `json:"hits"`
 }
 
+type GalleryResponseString struct {
+	Next string                   `json:"next,omitempty"`
+	Page int                      `json:"page"`
+	Hits []repository.GalleryData `json:"hits"`
+}
+
 // HTTP PUT submit a generation to gallery - for user
 // Only allow submitting user's own gallery items.
 func (c *RestAPI) HandleSubmitGenerationToGallery(w http.ResponseWriter, r *http.Request) {
@@ -423,10 +429,9 @@ func (c *RestAPI) HandleQueryGallery(w http.ResponseWriter, r *http.Request) {
 			generationGs[i].UpscaledImagePath = ""
 		}
 	}
-
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, GalleryResponse[*time.Time]{
-		Next: &next,
+	render.JSON(w, r, GalleryResponseString{
+		Next: next.Format("2006-01-02T15:04:05") + ".000000Z",
 		Page: page,
 		Hits: generationGs,
 	})

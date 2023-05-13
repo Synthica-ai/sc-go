@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
 	"github.com/stablecog/sc-go/database/ent"
-	"github.com/stablecog/sc-go/database/qdrant"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
 	"github.com/stablecog/sc-go/server/requests"
@@ -251,6 +250,10 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 
 	cursorStr := r.URL.Query().Get("cursor")
 	search := r.URL.Query().Get("search")
+	page, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		page = 1
+	}
 
 	filters := &requests.QueryGenerationFilters{}
 	err = filters.ParseURLQueryParameters(r.URL.Query())
@@ -261,59 +264,17 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 
 	// For search, use qdrant semantic search
 	if search != "" {
-		// get embeddings from clip service
-		e, err := c.Clip.GetEmbeddingFromText(search, 2)
+		generationGs, err := c.GetGenerationGs(page, GALLERY_PER_PAGE+1, search, "")
 		if err != nil {
-			log.Error("Error getting embedding from clip service", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
-			return
-		}
-
-		// Parse as qdrant filters
-		qdrantFilters, scoreThreshold := filters.ToQdrantFilters(false)
-		// Append user_id requirement
-		qdrantFilters.Must = append(qdrantFilters.Must, qdrant.SCMatchCondition{
-			Key:   "user_id",
-			Match: &qdrant.SCValue{Value: user.ID.String()},
-		})
-		// Deleted at not empty
-		qdrantFilters.Must = append(qdrantFilters.Must, qdrant.SCMatchCondition{
-			IsEmpty: &qdrant.SCIsEmpty{Key: "deleted_at"},
-		})
-
-		// Get cursor str as uint
-		var offset *uint
-		var total *uint
-		if cursorStr != "" {
-			cursoru64, err := strconv.ParseUint(cursorStr, 10, 64)
-			if err != nil {
-				responses.ErrBadRequest(w, r, "cursor must be a valid uint", "")
-				return
-			}
-			cursoru := uint(cursoru64)
-			offset = &cursoru
-		} else {
-			count, err := c.Qdrant.CountWithFilters(qdrantFilters, false)
-			if err != nil {
-				log.Error("Error counting qdrant", "err", err)
-				responses.ErrInternalServerError(w, r, "An unknown error has occured")
-				return
-			}
-			total = &count
-		}
-
-		// Query qdrant
-		qdrantRes, err := c.Qdrant.QueryGenerations(e, perPage, offset, scoreThreshold, qdrantFilters, false, false)
-		if err != nil {
-			log.Error("Error querying qdrant", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			log.Error("Error searching meili", "err", err)
+			responses.ErrInternalServerError(w, r, "Error querying gallery")
 			return
 		}
 
 		// Get generation output ids
 		var outputIds []uuid.UUID
-		for _, hit := range qdrantRes.Result {
-			outputId, err := uuid.Parse(hit.Id)
+		for _, hit := range generationGs {
+			outputId := hit.ID
 			if err != nil {
 				log.Error("Error parsing uuid", "err", err)
 				continue
@@ -336,8 +297,8 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 		}
 
 		generations := []repository.GenerationQueryWithOutputsResultFormatted{}
-		for _, hit := range qdrantRes.Result {
-			outputId, err := uuid.Parse(hit.Id)
+		for _, hit := range generationGs {
+			outputId := hit.ID
 			if err != nil {
 				log.Error("Error parsing uuid", "err", err)
 				continue
@@ -351,14 +312,9 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 		}
 		generationsUnsorted.Outputs = generations
 
-		if total != nil {
-			// uint to int
-			totalInt := int(*total)
-			generationsUnsorted.Total = &totalInt
-		}
-
 		// Get next cursor
-		generationsUnsorted.Next = qdrantRes.Next
+		next := uint(page) + 1
+		generationsUnsorted.Next = &next
 
 		// Return generations
 		render.Status(r, http.StatusOK)
