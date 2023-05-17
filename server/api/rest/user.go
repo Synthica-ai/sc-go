@@ -1,10 +1,13 @@
 package rest
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -14,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
+	"github.com/pkoukk/tiktoken-go"
 	"github.com/stablecog/sc-go/database/ent"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
@@ -377,6 +381,162 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 	// Return generations
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, generations)
+}
+
+func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
+	var user *ent.User
+	if user = c.GetUserIfAuthenticated(w, r); user == nil {
+		return
+	}
+
+	text := "Hello, world!"
+	encoding := "cl100k_base"
+
+	tke, err := tiktoken.GetEncoding(encoding)
+	if err != nil {
+		err = fmt.Errorf("getEncoding: %v", err)
+		return
+	}
+
+	token := tke.Encode(text, nil, nil)
+	numTokens := len(token)
+
+	if err := c.Repo.WithTx(func(tx *ent.Tx) error {
+		DB := tx.Client()
+
+		avTokens, err := c.Repo.GetChatTokens(user.ID, DB, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		newTokens := 0
+		spendCredits := 0
+		if avTokens < numTokens {
+			tmpTokens := numTokens - avTokens
+			if tmpTokens > 1000 {
+				spendCredits = tmpTokens / 1000
+				newTokens = tmpTokens % 1000
+			} else {
+				newTokens = 1000 - tmpTokens
+				spendCredits = 1
+			}
+
+		} else {
+			newTokens = avTokens - numTokens
+		}
+
+		err = c.Repo.UpdateChatTokens(user.ID, DB, newTokens, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		if spendCredits == 0 {
+			return nil
+		}
+
+		// Deduct credits from user
+		deducted, err := c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
+		if err != nil {
+			log.Error("Error deducting credits", "err", err)
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		} else if !deducted {
+			responses.ErrInsufficientCredits(w, r)
+			return responses.InsufficientCreditsErr
+		}
+
+		return nil
+	}); err != nil {
+		log.Error("Error in transaction", "err", err)
+		return
+	}
+
+	// Proxy part
+	originServerURL, err := url.Parse("https://synthica.ai")
+	if err != nil {
+		log.Fatal("invalid origin server URL")
+	}
+
+	// set req Host, URL and Request URI to forward a request to the origin server
+	r.Host = originServerURL.Host
+	r.URL.Host = originServerURL.Host
+	r.URL.Scheme = originServerURL.Scheme
+	r.RequestURI = ""
+
+	// save the response from the origin server
+	originServerResponse, err := http.DefaultClient.Do(r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprint(w, err)
+		return
+	}
+
+	var (
+		buf        bytes.Buffer
+		respTokens int
+	)
+	tee := io.TeeReader(originServerResponse.Body, &buf)
+
+	// return response to the client
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, tee)
+
+	bb, _ := ioutil.ReadAll(&buf)
+	respTokens = bytes.Count(bb, []byte{'\n'})
+
+	if err := c.Repo.WithTx(func(tx *ent.Tx) error {
+		DB := tx.Client()
+
+		avTokens, err := c.Repo.GetChatTokens(user.ID, DB, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		newTokens := 0
+		spendCredits := 0
+		if avTokens < respTokens {
+			tmpTokens := respTokens - avTokens
+			if tmpTokens > 1000 {
+				spendCredits = tmpTokens / 1000
+				newTokens = tmpTokens % 1000
+			} else {
+				newTokens = 1000 - tmpTokens
+				spendCredits = 1
+			}
+
+		} else {
+			newTokens = avTokens - respTokens
+		}
+
+		err = c.Repo.UpdateChatTokens(user.ID, DB, newTokens, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		if spendCredits == 0 {
+			return nil
+		}
+
+		// Deduct credits from user
+		deducted, err := c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
+		if err != nil {
+			log.Error("Error deducting credits", "err", err)
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		} else if !deducted {
+			// responses.ErrInsufficientCredits(w, r)
+			return responses.InsufficientCreditsErr
+		}
+
+		return nil
+	}); err != nil {
+		log.Error("Error in transaction", "err", err)
+		return
+	}
 }
 
 // HTTP Get - credits for user

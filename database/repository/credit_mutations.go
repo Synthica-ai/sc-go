@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -145,6 +146,40 @@ func (r *Repository) DeductCreditsFromUser(userID uuid.UUID, amount int32, DB *e
 		return false, err
 	}
 	return rowsAffected > 0, nil
+}
+
+func (r *Repository) GetChatTokens(userID uuid.UUID, DB *ent.Client, ctx context.Context) (tokens int, err error) {
+	if DB == nil {
+		DB = r.DB
+	}
+	rows, err := DB.QueryContext(ctx, "select tokens from credits c join users u ON u.id = c.user_id WHERE user_id=$1;", userID.String())
+	if err != nil {
+		return 0, err
+	}
+
+	for rows.Next() {
+		err := rows.Scan(&tokens)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return
+}
+
+func (r *Repository) UpdateChatTokens(userID uuid.UUID, DB *ent.Client, amount int, ctx context.Context) error {
+	if DB == nil {
+		DB = r.DB
+	}
+	_, err := DB.ExecContext(ctx, `
+		UPDATE credits set tokens=$1
+		FROM (
+			select c.id from credits c join users u ON u.id = c.user_id WHERE user_id=$2
+		) as ss
+		WHERE credits.id=ss.id;
+	 `, amount, userID.String())
+
+	return err
 }
 
 // Refund credits for user, starting with credits that expire soonest. Return true if refund was successful

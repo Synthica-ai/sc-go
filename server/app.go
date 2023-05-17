@@ -260,6 +260,18 @@ func main() {
 			})
 		})
 	})
+
+	// Routes that require authentication
+	app.Route("/ai-chat", func(r chi.Router) {
+		r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
+		r.Use(middleware.Logger)
+
+		r.Use(mw.RateLimit(10, 1*time.Second))
+
+		// Query credits
+		r.Post("/api/ask", hc.HandleAiChatAsk)
+	})
+
 	app.Route("/v1", func(r chi.Router) {
 		r.Get("/health", hc.HandleHealth)
 

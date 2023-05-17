@@ -67,6 +67,7 @@ require (
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/dlclark/regexp2 v1.8.1 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
@@ -84,6 +85,7 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/meilisearch/meilisearch-go v0.22.0 // indirect
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
+	github.com/pkoukk/tiktoken-go v0.1.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/supabase-community/gotrue-go v1.0.1 // indirect
 	github.com/tomnomnom/linkheader v0.0.0-20180905144013-02ca5825eb80 // indirect
