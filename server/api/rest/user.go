@@ -401,6 +401,7 @@ func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
 	token := tke.Encode(text, nil, nil)
 	numTokens := len(token)
 
+	deducted := true
 	if err := c.Repo.WithTx(func(tx *ent.Tx) error {
 		DB := tx.Client()
 
@@ -437,19 +438,23 @@ func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Deduct credits from user
-		deducted, err := c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
+		deducted, err = c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
 		if err != nil {
 			log.Error("Error deducting credits", "err", err)
 			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
 			return err
 		} else if !deducted {
-			responses.ErrInsufficientCredits(w, r)
-			return responses.InsufficientCreditsErr
+			c.Repo.UpdateChatTokens(user.ID, DB, 0, r.Context())
 		}
 
 		return nil
 	}); err != nil {
 		log.Error("Error in transaction", "err", err)
+		return
+	}
+
+	if !deducted {
+		responses.ErrInsufficientCredits(w, r)
 		return
 	}
 
@@ -529,7 +534,7 @@ func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
 			return err
 		} else if !deducted {
 			// responses.ErrInsufficientCredits(w, r)
-			return responses.InsufficientCreditsErr
+			c.Repo.UpdateChatTokens(user.ID, DB, 0, r.Context())
 		}
 
 		return nil
