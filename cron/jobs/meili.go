@@ -24,11 +24,9 @@ func (j *JobRunner) SyncMeili(log Logger, limit int) error {
 	lastSyncedGenUpdatedAtStr := j.Redis.Client.Get(j.Ctx, lastSyncedGenUpdatedAtKey).Val()
 	lastSyncedGenUpdatedAt, err := time.Parse(time.RFC3339, lastSyncedGenUpdatedAtStr)
 	var lastSyncGenUpdatedAtRef *time.Time
-	if err == nil {
-		lastSyncGenUpdatedAtRef = &lastSyncedGenUpdatedAt
-	}
+	lastSyncGenUpdatedAtRef = time.Now().Add(-1 * time.Minute * 1)
 
-	galleryItems, err := j.Repo.RetrieveGalleryData(limit, lastSyncGenUpdatedAtRef)
+	galleryItems, err := j.Repo.RetrieveGalleryData(1000, &lastSyncGenUpdatedAtRef)
 
 	if err != nil {
 		return err
