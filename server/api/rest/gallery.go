@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/render"
@@ -255,17 +256,29 @@ func (c *RestAPI) HandleSubmitGenerationToGallery(w http.ResponseWriter, r *http
 	render.JSON(w, r, res)
 }
 
-func (c *RestAPI) GetGenerationGs(page int, batchSize int, search string, filter string) ([]repository.GalleryData, error) {
+func (c *RestAPI) GetGenerationGs(page int, batchSize int, search string, models string) ([]repository.GalleryData, error) {
 	var generationGs = []repository.GalleryData{}
 	sortBy := []string{}
 	if search == "" {
 		sortBy = []string{"created_at:desc"}
 	}
-	res, err := c.Meili.Index("generation_g").Search(search, &meilisearch.SearchRequest{
+
+	opts := &meilisearch.SearchRequest{
 		Page:        int64(page),
 		HitsPerPage: int64(batchSize),
 		Sort:        sortBy,
-	})
+	}
+
+	if models != "" {
+		filters := strings.Split(models, ",")
+		for i, filter := range filters {
+			filters[i] = fmt.Sprintf("model_id = %s", filter)
+		}
+
+		opts.Filter = filters
+	}
+
+	res, err := c.Meili.Index("generation_g").Search(search, opts)
 	if err != nil {
 		log.Error("Error searching for generation_g", "err", err)
 		return nil, err
@@ -379,8 +392,9 @@ func (c *RestAPI) HandleQueryGallery(w http.ResponseWriter, r *http.Request) {
 	page := int(next.Sub(MAGIC_DATE).Seconds()) + 1
 
 	search := r.URL.Query().Get("search")
+	modelIDS := r.URL.Query().Get("model_ids")
 
-	generationGs, err := c.GetGenerationGs(page, GALLERY_PER_PAGE+1, search, "")
+	generationGs, err := c.GetGenerationGs(page, GALLERY_PER_PAGE+1, search, modelIDS)
 	if err != nil {
 		log.Error("Error searching meili", "err", err)
 		responses.ErrInternalServerError(w, r, "Error querying gallery")

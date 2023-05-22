@@ -254,6 +254,8 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 
 	cursorStr := r.URL.Query().Get("cursor")
 	search := r.URL.Query().Get("search")
+	modelIDS := r.URL.Query().Get("model_ids")
+
 	page, err := strconv.Atoi(cursorStr)
 	if err != nil {
 		page = 1
@@ -268,7 +270,7 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 
 	// For search, use qdrant semantic search
 	if search != "" {
-		generationGs, err := c.GetGenerationGs(page, GALLERY_PER_PAGE+1, search, "")
+		generationGs, err := c.GetGenerationGs(page, GALLERY_PER_PAGE+1, search, modelIDS)
 		if err != nil {
 			log.Error("Error searching meili", "err", err)
 			responses.ErrInternalServerError(w, r, "Error querying gallery")

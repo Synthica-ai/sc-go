@@ -17,7 +17,7 @@ var shouldSetSettings = true
 
 var lastSyncedGenUpdatedAtKey = fmt.Sprintf("%s:last_sync_gen_updated_at_v2", redisMeiliKeyPrefix)
 var sortableAttributes = []string{"updated_at", "created_at"}
-var filterableAttributes = []string{"id"}
+var filterableAttributes = []string{"model_id"}
 
 func (j *JobRunner) SyncMeili(log Logger, limit int) error {
 	var lastSyncedGenUpdatedAt time.Time
