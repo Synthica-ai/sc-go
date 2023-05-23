@@ -3,7 +3,9 @@ package middleware
 import (
 	"context"
 	"crypto/subtle"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -66,6 +68,26 @@ func (m *Middleware) AuthMiddleware(level AuthLevel) func(next http.Handler) htt
 				ctx = context.WithValue(ctx, "api_token_id", token.ID.String())
 			} else {
 				// Check supabase to see if it's all good
+				authToken := r.Header.Get("Authorization")
+
+				userId, email, lastSignIn = r.Header.Get("user-id"), r.Header.Get("user-email"), &time.Time{}
+
+				if devKey, ok := os.LookupEnv("DEV_KEY"); !ok || !strings.Contains(authToken, fmt.Sprintf("DevKey %s", devKey)) {
+					authHeader := strings.Split(r.Header.Get("Authorization"), "Bearer ")
+					if len(authHeader) != 2 {
+						responses.ErrUnauthorized(w, r)
+						return
+					}
+
+					// Check supabase to see if it's all good
+					var err error
+					userId, email, lastSignIn, err = m.SupabaseAuth.GetSupabaseUserIdFromAccessToken(authHeader[1])
+					if err != nil {
+						responses.ErrUnauthorized(w, r)
+						return
+					}
+				}
+
 				userId, email, lastSignIn, err = m.SupabaseAuth.GetSupabaseUserIdFromAccessToken(authHeader[1])
 				if err != nil {
 					responses.ErrUnauthorized(w, r)

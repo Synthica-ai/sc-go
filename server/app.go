@@ -6,9 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,12 +16,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-co-op/gocron"
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	chiprometheus "github.com/stablecog/chi-prometheus"
+	"github.com/stablecog/sc-go/cron/jobs"
 	"github.com/stablecog/sc-go/database"
-	"github.com/stablecog/sc-go/database/ent/generation"
 	"github.com/stablecog/sc-go/database/qdrant"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
@@ -35,6 +32,7 @@ import (
 	"github.com/stablecog/sc-go/server/middleware"
 	"github.com/stablecog/sc-go/server/requests"
 	"github.com/stablecog/sc-go/shared"
+	"github.com/stablecog/sc-go/uploadapi/api"
 	"github.com/stablecog/sc-go/utils"
 	stripe "github.com/stripe/stripe-go/v74/client"
 	"golang.org/x/net/http2"
@@ -58,9 +56,6 @@ func main() {
 
 	// Custom flags
 	createMockData := flag.Bool("load-mock-data", false, "Create test data in database")
-	transferUserData := flag.Bool("transfer-user", false, "transfer account data from one user to another")
-	sourceUser := flag.String("source-user", "", "source user id")
-	destUser := flag.String("dest-user", "", "destination user id")
 
 	flag.Parse()
 
@@ -205,6 +200,23 @@ func main() {
 	newSession := session.New(s3Config)
 	s3Client := s3.New(newSession)
 
+	jobRunner := jobs.JobRunner{
+		Repo:   repo,
+		Redis:  redis,
+		Ctx:    ctx,
+		Meili:  database.NewMeiliSearchClient(),
+		Track:  analyticsService,
+		Stripe: stripeClient,
+	}
+
+	err = jobRunner.SyncMeili(jobs.NewJobLogger("MEILI_SYNC"), 1000)
+	if err != nil {
+		log.Fatal("Error syncing meili", "err", err)
+		os.Exit(1)
+	}
+
+	s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 100)
+
 	// Create controller
 	apiTokenSmap := shared.NewSyncMap[chan requests.CogWebhookMessage]()
 	hc := rest.RestAPI{
@@ -216,6 +228,7 @@ func main() {
 		QueueThrottler: qThrottler,
 		S3:             s3Client,
 		Qdrant:         qdrantClient,
+		Meili:          database.NewMeiliSearchClient(),
 		Clip:           clip.NewClipService(redis),
 		SMap:           apiTokenSmap,
 	}
@@ -227,77 +240,41 @@ func main() {
 		Redis:        redis,
 	}
 
-	if *transferUserData {
-		sourceID := uuid.MustParse(*sourceUser)
-		targetID := uuid.MustParse(*destUser)
-
-		log.Info("📦 Transferring user data...", "source", sourceID, "target", targetID)
-		// Get all generation output ids
-		outputs := repo.DB.Generation.Query().Where(generation.UserIDEQ(targetID)).QueryGenerationOutputs().AllX(ctx)
-		gOutputIDs := make([]uuid.UUID, len(outputs))
-		for i, o := range outputs {
-			gOutputIDs[i] = o.ID
-		}
-
-		// Set qdrant payload
-		qdrantPayload := map[string]interface{}{
-			"user_id": targetID.String(),
-		}
-
-		err := qdrantClient.SetPayload(qdrantPayload, gOutputIDs, false)
-		if err != nil {
-			log.Fatalf("Error setting qdrant payload: %v", err)
-		}
-
-		log.Infof("Sync'd qdrant")
-
-		// Setup S3 Client
-		region := os.Getenv("S3_IMG2IMG_REGION")
-		accessKey := os.Getenv("S3_IMG2IMG_ACCESS_KEY")
-		secretKey := os.Getenv("S3_IMG2IMG_SECRET_KEY")
-
-		s3Config := &aws.Config{
-			Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
-			Endpoint:    aws.String(os.Getenv("S3_IMG2IMG_ENDPOINT")),
-			Region:      aws.String(region),
-		}
-
-		newSession := session.New(s3Config)
-		s3Client := s3.New(newSession)
-
-		sourceHash := utils.Sha256(sourceID.String())
-		targetHash := utils.Sha256(targetID.String())
-
-		out, err := s3Client.ListObjects(&s3.ListObjectsInput{
-			Bucket: aws.String(os.Getenv("S3_IMG2IMG_BUCKET_NAME")),
-			Prefix: aws.String(fmt.Sprintf("%s/", sourceHash)),
-		})
-		if err != nil {
-			log.Fatalf("Error listing img2img objects for user %s: %v", sourceID.String(), err)
-		}
-
-		for _, o := range out.Contents {
-			// Move object
-			src := *o.Key
-			dst := strings.Replace(src, sourceHash, targetHash, 1)
-			_, err := s3Client.CopyObject(&s3.CopyObjectInput{
-				Bucket:     aws.String(os.Getenv("S3_IMG2IMG_BUCKET_NAME")),
-				CopySource: aws.String(url.QueryEscape(fmt.Sprintf("%s/%s", os.Getenv("S3_IMG2IMG_BUCKET_NAME"), src))),
-				Key:        aws.String(dst),
-			})
-			if err != nil {
-				log.Fatalf("Error copying img2img object for user %s: %v", sourceID.String(), err)
-			}
-		}
-
-		log.Infof("Finished sync")
-		os.Exit(0)
+	// Create controller
+	hu := api.Controller{
+		Repo:  repo,
+		Redis: redis,
+		S3:    s3Client,
 	}
 
 	// Routes
 	app.Get("/", hc.HandleHealth)
 	app.Handle("/metrics", middleware.BasicAuth(promhttp.Handler(), "user", "password", "Authentication required"))
 	app.Get("/clipq", hc.HandleClipQSearch)
+	app.Route("/upload", func(r chi.Router) {
+		// File upload
+		r.Route("/", func(r chi.Router) {
+			r.Get("/health", hc.HandleHealth)
+			r.Route("/", func(r chi.Router) {
+				r.Use(middleware.Logger)
+				r.Use(mw.RateLimit(2, "srv", 1*time.Second))
+				r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
+				r.Post("/", hu.HandleUpload)
+			})
+		})
+	})
+
+	// Routes that require authentication
+	app.Route("/ai-chat", func(r chi.Router) {
+		r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
+		r.Use(middleware.Logger)
+
+		r.Use(mw.RateLimit(10, "srv", 1*time.Second))
+
+		// Query credits
+		r.Post("/api/ask", hc.HandleAiChatAsk)
+	})
+
 	app.Route("/v1", func(r chi.Router) {
 		r.Get("/health", hc.HandleHealth)
 
@@ -333,7 +310,7 @@ func main() {
 			r.Use(middleware.Logger)
 			// 20 requests per second
 			r.Use(mw.RateLimit(20, "srv", 1*time.Second))
-			r.Get("/", hc.HandleSemanticSearchGallery)
+			r.Get("/", hc.HandleQueryGallery)
 		})
 
 		// Routes that require authentication

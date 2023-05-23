@@ -46,8 +46,7 @@ func GetCorsOrigins() []string {
 			"http://localhost:3000",
 			"http://localhost:8000",
 			"https://stablecog-git-v21-stablecog.vercel.app",
-			"https://stablecog-git-v3-stablecog.vercel.app",
-			"https://stablecog.com",
+			"https://synthica.ai",
 		}
 	}
 	return []string{
@@ -55,7 +54,6 @@ func GetCorsOrigins() []string {
 		"http://localhost:5173",
 		"http://localhost:8000",
 		"https://stablecog-git-v21-stablecog.vercel.app",
-		"https://stablecog-git-v3-stablecog.vercel.app",
-		"https://stablecog.com",
+		"https://synthica.ai",
 	}
 }

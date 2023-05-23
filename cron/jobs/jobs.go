@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/meilisearch/meilisearch-go"
 	"github.com/stablecog/sc-go/cron/discord"
 	"github.com/stablecog/sc-go/database"
 	"github.com/stablecog/sc-go/database/qdrant"
@@ -24,6 +25,7 @@ type JobRunner struct {
 	S3        *s3.S3
 	S3Img2Img *s3.S3
 	Qdrant    *qdrant.QdrantClient
+	Meili     *meilisearch.Client
 }
 
 // Just wrap logger so we can include the job name without repeating it

@@ -1,10 +1,13 @@
 package rest
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -14,8 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
+	"github.com/pkoukk/tiktoken-go"
 	"github.com/stablecog/sc-go/database/ent"
-	"github.com/stablecog/sc-go/database/qdrant"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
 	"github.com/stablecog/sc-go/server/requests"
@@ -251,6 +254,12 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 
 	cursorStr := r.URL.Query().Get("cursor")
 	search := r.URL.Query().Get("search")
+	modelIDS := r.URL.Query().Get("model_ids")
+
+	page, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		page = 1
+	}
 
 	filters := &requests.QueryGenerationFilters{}
 	err = filters.ParseURLQueryParameters(r.URL.Query())
@@ -261,59 +270,17 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 
 	// For search, use qdrant semantic search
 	if search != "" {
-		// get embeddings from clip service
-		e, err := c.Clip.GetEmbeddingFromText(search, 2)
+		generationGs, err := c.GetGenerationGs(page, GALLERY_PER_PAGE+1, search, modelIDS)
 		if err != nil {
-			log.Error("Error getting embedding from clip service", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
-			return
-		}
-
-		// Parse as qdrant filters
-		qdrantFilters, scoreThreshold := filters.ToQdrantFilters(false)
-		// Append user_id requirement
-		qdrantFilters.Must = append(qdrantFilters.Must, qdrant.SCMatchCondition{
-			Key:   "user_id",
-			Match: &qdrant.SCValue{Value: user.ID.String()},
-		})
-		// Deleted at not empty
-		qdrantFilters.Must = append(qdrantFilters.Must, qdrant.SCMatchCondition{
-			IsEmpty: &qdrant.SCIsEmpty{Key: "deleted_at"},
-		})
-
-		// Get cursor str as uint
-		var offset *uint
-		var total *uint
-		if cursorStr != "" {
-			cursoru64, err := strconv.ParseUint(cursorStr, 10, 64)
-			if err != nil {
-				responses.ErrBadRequest(w, r, "cursor must be a valid uint", "")
-				return
-			}
-			cursoru := uint(cursoru64)
-			offset = &cursoru
-		} else {
-			count, err := c.Qdrant.CountWithFilters(qdrantFilters, false)
-			if err != nil {
-				log.Error("Error counting qdrant", "err", err)
-				responses.ErrInternalServerError(w, r, "An unknown error has occurred")
-				return
-			}
-			total = &count
-		}
-
-		// Query qdrant
-		qdrantRes, err := c.Qdrant.QueryGenerations(e, perPage, offset, scoreThreshold, qdrantFilters, false, false)
-		if err != nil {
-			log.Error("Error querying qdrant", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+			log.Error("Error searching meili", "err", err)
+			responses.ErrInternalServerError(w, r, "Error querying gallery")
 			return
 		}
 
 		// Get generation output ids
 		var outputIds []uuid.UUID
-		for _, hit := range qdrantRes.Result {
-			outputId, err := uuid.Parse(hit.Id)
+		for _, hit := range generationGs {
+			outputId := hit.ID
 			if err != nil {
 				log.Error("Error parsing uuid", "err", err)
 				continue
@@ -336,8 +303,8 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 		}
 
 		generations := []repository.GenerationQueryWithOutputsResultFormatted{}
-		for _, hit := range qdrantRes.Result {
-			outputId, err := uuid.Parse(hit.Id)
+		for _, hit := range generationGs {
+			outputId := hit.ID
 			if err != nil {
 				log.Error("Error parsing uuid", "err", err)
 				continue
@@ -351,14 +318,9 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 		}
 		generationsUnsorted.Outputs = generations
 
-		if total != nil {
-			// uint to int
-			totalInt := int(*total)
-			generationsUnsorted.Total = &totalInt
-		}
-
 		// Get next cursor
-		generationsUnsorted.Next = qdrantRes.Next
+		next := uint(page) + 1
+		generationsUnsorted.Next = &next
 
 		// Return generations
 		render.Status(r, http.StatusOK)
@@ -421,6 +383,167 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 	// Return generations
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, generations)
+}
+
+func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
+	var user *ent.User
+	if user = c.GetUserIfAuthenticated(w, r); user == nil {
+		return
+	}
+
+	text := "Hello, world!"
+	encoding := "cl100k_base"
+
+	tke, err := tiktoken.GetEncoding(encoding)
+	if err != nil {
+		err = fmt.Errorf("getEncoding: %v", err)
+		return
+	}
+
+	token := tke.Encode(text, nil, nil)
+	numTokens := len(token)
+
+	deducted := true
+	if err := c.Repo.WithTx(func(tx *ent.Tx) error {
+		DB := tx.Client()
+
+		avTokens, err := c.Repo.GetChatTokens(user.ID, DB, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		newTokens := 0
+		spendCredits := 0
+		if avTokens < numTokens {
+			tmpTokens := numTokens - avTokens
+			if tmpTokens > 1000 {
+				spendCredits = tmpTokens / 1000
+				newTokens = tmpTokens % 1000
+			} else {
+				newTokens = 1000 - tmpTokens
+				spendCredits = 1
+			}
+
+		} else {
+			newTokens = avTokens - numTokens
+		}
+
+		err = c.Repo.UpdateChatTokens(user.ID, DB, newTokens, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		if spendCredits == 0 {
+			return nil
+		}
+
+		// Deduct credits from user
+		deducted, err = c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
+		if err != nil {
+			log.Error("Error deducting credits", "err", err)
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		} else if !deducted {
+			c.Repo.UpdateChatTokens(user.ID, DB, 0, r.Context())
+		}
+
+		return nil
+	}); err != nil {
+		log.Error("Error in transaction", "err", err)
+		return
+	}
+
+	if !deducted {
+		responses.ErrInsufficientCredits(w, r)
+		return
+	}
+
+	// Proxy part
+	originServerURL, err := url.Parse("https://synthica.ai")
+	if err != nil {
+		log.Fatal("invalid origin server URL")
+	}
+
+	// set req Host, URL and Request URI to forward a request to the origin server
+	r.Host = originServerURL.Host
+	r.URL.Host = originServerURL.Host
+	r.URL.Scheme = originServerURL.Scheme
+	r.RequestURI = ""
+
+	// save the response from the origin server
+	originServerResponse, err := http.DefaultClient.Do(r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprint(w, err)
+		return
+	}
+
+	var (
+		buf        bytes.Buffer
+		respTokens int
+	)
+	tee := io.TeeReader(originServerResponse.Body, &buf)
+
+	// return response to the client
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, tee)
+
+	bb, _ := ioutil.ReadAll(&buf)
+	respTokens = bytes.Count(bb, []byte{'\n'})
+
+	if err := c.Repo.WithTx(func(tx *ent.Tx) error {
+		DB := tx.Client()
+
+		avTokens, err := c.Repo.GetChatTokens(user.ID, DB, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		newTokens := 0
+		spendCredits := 0
+		if avTokens < respTokens {
+			tmpTokens := respTokens - avTokens
+			if tmpTokens > 1000 {
+				spendCredits = tmpTokens / 1000
+				newTokens = tmpTokens % 1000
+			} else {
+				newTokens = 1000 - tmpTokens
+				spendCredits = 1
+			}
+
+		} else {
+			newTokens = avTokens - respTokens
+		}
+
+		err = c.Repo.UpdateChatTokens(user.ID, DB, newTokens, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		}
+
+		if spendCredits == 0 {
+			return nil
+		}
+
+		// Deduct credits from user
+		deducted, err := c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
+		if err != nil {
+			log.Error("Error deducting credits", "err", err)
+			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+			return err
+		} else if !deducted {
+			// responses.ErrInsufficientCredits(w, r)
+			c.Repo.UpdateChatTokens(user.ID, DB, 0, r.Context())
+		}
+
+		return nil
+	}); err != nil {
+		log.Error("Error in transaction", "err", err)
+		return
+	}
 }
 
 // HTTP Get - credits for user
