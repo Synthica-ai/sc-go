@@ -411,6 +411,14 @@ func (q *QdrantClient) SetPayload(payload map[string]interface{}, ids []uuid.UUI
 		return err
 	}
 	if res.StatusCode() != http.StatusOK {
+		if res.JSON4XX != nil {
+			marshalled, err := json.Marshal(*res.JSON4XX)
+			if err != nil {
+				log.Errorf("Error marshalling response %v", err)
+			} else {
+				log.Errorf("Error setting payload res %v", string(marshalled))
+			}
+		}
 		log.Errorf("Error setting payload %v", res.StatusCode())
 		return fmt.Errorf("Error setting payload %v", res.StatusCode())
 	}
@@ -726,6 +734,44 @@ func (q *QdrantClient) CreateAllIndexes() error {
 		}
 	}
 	return mErr.ErrorOrNil()
+}
+
+func (q *QdrantClient) DeleteAllIDs(ids []uuid.UUID, noRetry bool) error {
+	p := &DeletePointsParams{
+		Wait: utils.ToPtr(false),
+	}
+	body := DeletePointsJSONRequestBody{}
+	extPointId := make([]ExtendedPointId, len(ids))
+	for i, id := range ids {
+		rId := ExtendedPointId{}
+		err := rId.FromExtendedPointId1(id)
+		if err != nil {
+			return err
+		}
+		extPointId[i] = rId
+	}
+	ls := PointIdsList{
+		Points: extPointId,
+	}
+	body.FromPointIdsList(ls)
+	resp, err := q.Client.DeletePointsWithResponse(q.Ctx, q.CollectionName, p, body)
+	if err != nil {
+		if !noRetry && (os.IsTimeout(err) || strings.Contains(err.Error(), "connection refused")) {
+			err = q.UpdateActiveClient()
+			if err == nil {
+				return q.DeleteAllIDs(ids, true)
+			}
+		}
+		log.Errorf("Error deleting multi points %v", err)
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		log.Errorf("Error deleting multi points %v", resp.StatusCode())
+		return fmt.Errorf("Error deleting multi points %v", resp.StatusCode())
+	}
+
+	return nil
+
 }
 
 type QResponse struct {

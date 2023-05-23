@@ -23,6 +23,12 @@ const (
 	FieldLastSignInAt = "last_sign_in_at"
 	// FieldLastSeenAt holds the string denoting the last_seen_at field in the database.
 	FieldLastSeenAt = "last_seen_at"
+	// FieldBannedAt holds the string denoting the banned_at field in the database.
+	FieldBannedAt = "banned_at"
+	// FieldScheduledForDeletionOn holds the string denoting the scheduled_for_deletion_on field in the database.
+	FieldScheduledForDeletionOn = "scheduled_for_deletion_on"
+	// FieldDataDeletedAt holds the string denoting the data_deleted_at field in the database.
+	FieldDataDeletedAt = "data_deleted_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -35,6 +41,8 @@ const (
 	EdgeUpscales = "upscales"
 	// EdgeCredits holds the string denoting the credits edge name in mutations.
 	EdgeCredits = "credits"
+	// EdgeAPITokens holds the string denoting the api_tokens edge name in mutations.
+	EdgeAPITokens = "api_tokens"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// UserRolesTable is the table that holds the user_roles relation/edge.
@@ -65,6 +73,13 @@ const (
 	CreditsInverseTable = "credits"
 	// CreditsColumn is the table column denoting the credits relation/edge.
 	CreditsColumn = "user_id"
+	// APITokensTable is the table that holds the api_tokens relation/edge.
+	APITokensTable = "api_tokens"
+	// APITokensInverseTable is the table name for the ApiToken entity.
+	// It exists in this package in order to avoid circular dependency with the "apitoken" package.
+	APITokensInverseTable = "api_tokens"
+	// APITokensColumn is the table column denoting the api_tokens relation/edge.
+	APITokensColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -75,6 +90,9 @@ var Columns = []string{
 	FieldActiveProductID,
 	FieldLastSignInAt,
 	FieldLastSeenAt,
+	FieldBannedAt,
+	FieldScheduledForDeletionOn,
+	FieldDataDeletedAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }

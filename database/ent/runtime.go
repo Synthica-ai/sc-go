@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stablecog/sc-go/database/ent/apitoken"
 	"github.com/stablecog/sc-go/database/ent/credit"
 	"github.com/stablecog/sc-go/database/ent/credittype"
 	"github.com/stablecog/sc-go/database/ent/deviceinfo"
@@ -28,6 +29,34 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	apitokenFields := schema.ApiToken{}.Fields()
+	_ = apitokenFields
+	// apitokenDescIsActive is the schema descriptor for is_active field.
+	apitokenDescIsActive := apitokenFields[4].Descriptor()
+	// apitoken.DefaultIsActive holds the default value on creation for the is_active field.
+	apitoken.DefaultIsActive = apitokenDescIsActive.Default.(bool)
+	// apitokenDescUses is the schema descriptor for uses field.
+	apitokenDescUses := apitokenFields[5].Descriptor()
+	// apitoken.DefaultUses holds the default value on creation for the uses field.
+	apitoken.DefaultUses = apitokenDescUses.Default.(int)
+	// apitokenDescCreditsSpent is the schema descriptor for credits_spent field.
+	apitokenDescCreditsSpent := apitokenFields[6].Descriptor()
+	// apitoken.DefaultCreditsSpent holds the default value on creation for the credits_spent field.
+	apitoken.DefaultCreditsSpent = apitokenDescCreditsSpent.Default.(int)
+	// apitokenDescCreatedAt is the schema descriptor for created_at field.
+	apitokenDescCreatedAt := apitokenFields[9].Descriptor()
+	// apitoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	apitoken.DefaultCreatedAt = apitokenDescCreatedAt.Default.(func() time.Time)
+	// apitokenDescUpdatedAt is the schema descriptor for updated_at field.
+	apitokenDescUpdatedAt := apitokenFields[10].Descriptor()
+	// apitoken.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	apitoken.DefaultUpdatedAt = apitokenDescUpdatedAt.Default.(func() time.Time)
+	// apitoken.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	apitoken.UpdateDefaultUpdatedAt = apitokenDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// apitokenDescID is the schema descriptor for id field.
+	apitokenDescID := apitokenFields[0].Descriptor()
+	// apitoken.DefaultID holds the default value on creation for the id field.
+	apitoken.DefaultID = apitokenDescID.Default.(func() uuid.UUID)
 	creditFields := schema.Credit{}.Fields()
 	_ = creditFields
 	// creditDescReplenishedAt is the schema descriptor for replenished_at field.
@@ -107,11 +136,11 @@ func init() {
 	// generation.DefaultWasAutoSubmitted holds the default value on creation for the was_auto_submitted field.
 	generation.DefaultWasAutoSubmitted = generationDescWasAutoSubmitted.Default.(bool)
 	// generationDescCreatedAt is the schema descriptor for created_at field.
-	generationDescCreatedAt := generationFields[23].Descriptor()
+	generationDescCreatedAt := generationFields[24].Descriptor()
 	// generation.DefaultCreatedAt holds the default value on creation for the created_at field.
 	generation.DefaultCreatedAt = generationDescCreatedAt.Default.(func() time.Time)
 	// generationDescUpdatedAt is the schema descriptor for updated_at field.
-	generationDescUpdatedAt := generationFields[24].Descriptor()
+	generationDescUpdatedAt := generationFields[25].Descriptor()
 	// generation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	generation.DefaultUpdatedAt = generationDescUpdatedAt.Default.(func() time.Time)
 	// generation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -122,12 +151,24 @@ func init() {
 	generation.DefaultID = generationDescID.Default.(func() uuid.UUID)
 	generationmodelFields := schema.GenerationModel{}.Fields()
 	_ = generationmodelFields
+	// generationmodelDescIsActive is the schema descriptor for is_active field.
+	generationmodelDescIsActive := generationmodelFields[2].Descriptor()
+	// generationmodel.DefaultIsActive holds the default value on creation for the is_active field.
+	generationmodel.DefaultIsActive = generationmodelDescIsActive.Default.(bool)
+	// generationmodelDescIsDefault is the schema descriptor for is_default field.
+	generationmodelDescIsDefault := generationmodelFields[3].Descriptor()
+	// generationmodel.DefaultIsDefault holds the default value on creation for the is_default field.
+	generationmodel.DefaultIsDefault = generationmodelDescIsDefault.Default.(bool)
+	// generationmodelDescIsHidden is the schema descriptor for is_hidden field.
+	generationmodelDescIsHidden := generationmodelFields[4].Descriptor()
+	// generationmodel.DefaultIsHidden holds the default value on creation for the is_hidden field.
+	generationmodel.DefaultIsHidden = generationmodelDescIsHidden.Default.(bool)
 	// generationmodelDescCreatedAt is the schema descriptor for created_at field.
-	generationmodelDescCreatedAt := generationmodelFields[2].Descriptor()
+	generationmodelDescCreatedAt := generationmodelFields[5].Descriptor()
 	// generationmodel.DefaultCreatedAt holds the default value on creation for the created_at field.
 	generationmodel.DefaultCreatedAt = generationmodelDescCreatedAt.Default.(func() time.Time)
 	// generationmodelDescUpdatedAt is the schema descriptor for updated_at field.
-	generationmodelDescUpdatedAt := generationmodelFields[3].Descriptor()
+	generationmodelDescUpdatedAt := generationmodelFields[6].Descriptor()
 	// generationmodel.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	generationmodel.DefaultUpdatedAt = generationmodelDescUpdatedAt.Default.(func() time.Time)
 	// generationmodel.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -194,12 +235,24 @@ func init() {
 	prompt.DefaultID = promptDescID.Default.(func() uuid.UUID)
 	schedulerFields := schema.Scheduler{}.Fields()
 	_ = schedulerFields
+	// schedulerDescIsActive is the schema descriptor for is_active field.
+	schedulerDescIsActive := schedulerFields[2].Descriptor()
+	// scheduler.DefaultIsActive holds the default value on creation for the is_active field.
+	scheduler.DefaultIsActive = schedulerDescIsActive.Default.(bool)
+	// schedulerDescIsDefault is the schema descriptor for is_default field.
+	schedulerDescIsDefault := schedulerFields[3].Descriptor()
+	// scheduler.DefaultIsDefault holds the default value on creation for the is_default field.
+	scheduler.DefaultIsDefault = schedulerDescIsDefault.Default.(bool)
+	// schedulerDescIsHidden is the schema descriptor for is_hidden field.
+	schedulerDescIsHidden := schedulerFields[4].Descriptor()
+	// scheduler.DefaultIsHidden holds the default value on creation for the is_hidden field.
+	scheduler.DefaultIsHidden = schedulerDescIsHidden.Default.(bool)
 	// schedulerDescCreatedAt is the schema descriptor for created_at field.
-	schedulerDescCreatedAt := schedulerFields[2].Descriptor()
+	schedulerDescCreatedAt := schedulerFields[5].Descriptor()
 	// scheduler.DefaultCreatedAt holds the default value on creation for the created_at field.
 	scheduler.DefaultCreatedAt = schedulerDescCreatedAt.Default.(func() time.Time)
 	// schedulerDescUpdatedAt is the schema descriptor for updated_at field.
-	schedulerDescUpdatedAt := schedulerFields[3].Descriptor()
+	schedulerDescUpdatedAt := schedulerFields[6].Descriptor()
 	// scheduler.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	scheduler.DefaultUpdatedAt = schedulerDescUpdatedAt.Default.(func() time.Time)
 	// scheduler.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -215,11 +268,11 @@ func init() {
 	// upscale.DefaultSystemGenerated holds the default value on creation for the system_generated field.
 	upscale.DefaultSystemGenerated = upscaleDescSystemGenerated.Default.(bool)
 	// upscaleDescCreatedAt is the schema descriptor for created_at field.
-	upscaleDescCreatedAt := upscaleFields[14].Descriptor()
+	upscaleDescCreatedAt := upscaleFields[15].Descriptor()
 	// upscale.DefaultCreatedAt holds the default value on creation for the created_at field.
 	upscale.DefaultCreatedAt = upscaleDescCreatedAt.Default.(func() time.Time)
 	// upscaleDescUpdatedAt is the schema descriptor for updated_at field.
-	upscaleDescUpdatedAt := upscaleFields[15].Descriptor()
+	upscaleDescUpdatedAt := upscaleFields[16].Descriptor()
 	// upscale.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	upscale.DefaultUpdatedAt = upscaleDescUpdatedAt.Default.(func() time.Time)
 	// upscale.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -230,12 +283,24 @@ func init() {
 	upscale.DefaultID = upscaleDescID.Default.(func() uuid.UUID)
 	upscalemodelFields := schema.UpscaleModel{}.Fields()
 	_ = upscalemodelFields
+	// upscalemodelDescIsActive is the schema descriptor for is_active field.
+	upscalemodelDescIsActive := upscalemodelFields[2].Descriptor()
+	// upscalemodel.DefaultIsActive holds the default value on creation for the is_active field.
+	upscalemodel.DefaultIsActive = upscalemodelDescIsActive.Default.(bool)
+	// upscalemodelDescIsDefault is the schema descriptor for is_default field.
+	upscalemodelDescIsDefault := upscalemodelFields[3].Descriptor()
+	// upscalemodel.DefaultIsDefault holds the default value on creation for the is_default field.
+	upscalemodel.DefaultIsDefault = upscalemodelDescIsDefault.Default.(bool)
+	// upscalemodelDescIsHidden is the schema descriptor for is_hidden field.
+	upscalemodelDescIsHidden := upscalemodelFields[4].Descriptor()
+	// upscalemodel.DefaultIsHidden holds the default value on creation for the is_hidden field.
+	upscalemodel.DefaultIsHidden = upscalemodelDescIsHidden.Default.(bool)
 	// upscalemodelDescCreatedAt is the schema descriptor for created_at field.
-	upscalemodelDescCreatedAt := upscalemodelFields[2].Descriptor()
+	upscalemodelDescCreatedAt := upscalemodelFields[5].Descriptor()
 	// upscalemodel.DefaultCreatedAt holds the default value on creation for the created_at field.
 	upscalemodel.DefaultCreatedAt = upscalemodelDescCreatedAt.Default.(func() time.Time)
 	// upscalemodelDescUpdatedAt is the schema descriptor for updated_at field.
-	upscalemodelDescUpdatedAt := upscalemodelFields[3].Descriptor()
+	upscalemodelDescUpdatedAt := upscalemodelFields[6].Descriptor()
 	// upscalemodel.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	upscalemodel.DefaultUpdatedAt = upscalemodelDescUpdatedAt.Default.(func() time.Time)
 	// upscalemodel.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -267,11 +332,11 @@ func init() {
 	// user.DefaultLastSeenAt holds the default value on creation for the last_seen_at field.
 	user.DefaultLastSeenAt = userDescLastSeenAt.Default.(func() time.Time)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[6].Descriptor()
+	userDescCreatedAt := userFields[9].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 	// userDescUpdatedAt is the schema descriptor for updated_at field.
-	userDescUpdatedAt := userFields[7].Descriptor()
+	userDescUpdatedAt := userFields[10].Descriptor()
 	// user.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

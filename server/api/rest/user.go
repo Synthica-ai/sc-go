@@ -47,19 +47,19 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	user, err := c.Repo.GetUserWithRoles(*userID)
 	if err != nil {
 		log.Error("Error getting user", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	} else if user == nil {
 		// Handle create user flow
 		freeCreditType, err := c.Repo.GetOrCreateFreeCreditType()
 		if err != nil {
 			log.Error("Error getting free credit type", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 		if freeCreditType == nil {
 			log.Error("Server misconfiguration: a credit_type with the name 'free' must exist")
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 
@@ -96,7 +96,7 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}); err != nil {
 			log.Error("Error creating user", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			// Delete stripe customer
 			if customer != nil {
 				_, err := c.StripeClient.Customers.Del(customer.ID, nil)
@@ -113,7 +113,7 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 		user, err = c.Repo.GetUserWithRoles(*userID)
 		if err != nil {
 			log.Error("Error getting user with roles", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 	}
@@ -122,7 +122,7 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	totalRemaining, err := c.Repo.GetNonExpiredCreditTotalForUser(*userID, nil)
 	if err != nil {
 		log.Error("Error getting credits for user", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -209,7 +209,7 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	paidCreditCount, err := c.Repo.HasPaidCredits(*userID)
 	if err != nil {
 		log.Error("Error getting paid credits for user", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -292,7 +292,7 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 		generationsUnsorted, err := c.Repo.RetrieveGenerationsWithOutputIDs(outputIds)
 		if err != nil {
 			log.Error("Error getting generations", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 
@@ -608,6 +608,11 @@ func (c *RestAPI) HandleDeleteGenerationOutputForUser(w http.ResponseWriter, r *
 		return
 	}
 
+	if user.BannedAt != nil {
+		responses.ErrForbidden(w, r)
+		return
+	}
+
 	// Parse request body
 	reqBody, _ := io.ReadAll(r.Body)
 	var deleteReq requests.DeleteGenerationRequest
@@ -634,6 +639,11 @@ func (c *RestAPI) HandleDeleteGenerationOutputForUser(w http.ResponseWriter, r *
 func (c *RestAPI) HandleFavoriteGenerationOutputsForUser(w http.ResponseWriter, r *http.Request) {
 	var user *ent.User
 	if user = c.GetUserIfAuthenticated(w, r); user == nil {
+		return
+	}
+
+	if user.BannedAt != nil {
+		responses.ErrForbidden(w, r)
 		return
 	}
 

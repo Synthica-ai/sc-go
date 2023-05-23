@@ -15,7 +15,7 @@ func (r *Repository) GetOrCreatePrompts(promptText, negativePromptText string, D
 	}
 	// Check if prompt exists
 	var dbPrompt *ent.Prompt
-	dbPrompt, err = DB.Prompt.Query().Where(prompt.TextEQ(promptText)).Only(r.Ctx)
+	dbPrompt, err = DB.Prompt.Query().Where(prompt.TextEQ(promptText)).First(r.Ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			// Create prompt
@@ -31,7 +31,7 @@ func (r *Repository) GetOrCreatePrompts(promptText, negativePromptText string, D
 	// Check if negative prompt exists
 	var dbNegativePrompt *ent.NegativePrompt
 	if negativePromptText != "" {
-		dbNegativePrompt, err = DB.NegativePrompt.Query().Where(negativeprompt.TextEQ(negativePromptText)).Only(r.Ctx)
+		dbNegativePrompt, err = DB.NegativePrompt.Query().Where(negativeprompt.TextEQ(negativePromptText)).First(r.Ctx)
 		if err != nil {
 			if ent.IsNotFound(err) {
 				// Create negative prompt
@@ -62,7 +62,7 @@ func (r *Repository) GetOrCreateDeviceInfo(deviceType, deviceOs, deviceBrowser s
 	}
 	// Check if device info combo exists
 	var dbDeviceInfo *ent.DeviceInfo
-	dbDeviceInfo, err = DB.DeviceInfo.Query().Where(deviceinfo.Type(deviceType), deviceinfo.Os(deviceOs), deviceinfo.Browser(deviceBrowser)).Only(r.Ctx)
+	dbDeviceInfo, err = DB.DeviceInfo.Query().Where(deviceinfo.Type(deviceType), deviceinfo.Os(deviceOs), deviceinfo.Browser(deviceBrowser)).First(r.Ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			// Create device info

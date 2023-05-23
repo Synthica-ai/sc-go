@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
 	"github.com/stablecog/sc-go/database/ent"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
@@ -30,6 +31,17 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(reqBody, &upscaleReq)
 	if err != nil {
 		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	if user.BannedAt != nil {
+		remainingCredits, _ := c.Repo.GetNonExpiredCreditTotalForUser(user.ID, nil)
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, &responses.TaskQueuedResponse{
+			ID:               uuid.NewString(),
+			UIId:             upscaleReq.UIId,
+			RemainingCredits: remainingCredits,
+		})
 		return
 	}
 
@@ -56,19 +68,19 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Validation
-	err = upscaleReq.Validate()
+	// Validation (skip for super admins)
+	err = upscaleReq.Validate(false)
 	if err != nil {
 		responses.ErrBadRequest(w, r, err.Error(), "")
 		return
 	}
 
 	// Get queue count
-	nq, err := c.QueueThrottler.NumQueued(user.ID.String())
+	nq, err := c.QueueThrottler.NumQueued(fmt.Sprintf("u:%s", user.ID.String()))
 	if err != nil {
 		log.Warn("Error getting queue count for user", "err", err, "user_id", user.ID)
 	}
-	if err == nil && nq > qMax {
+	if err == nil && nq >= qMax {
 		responses.ErrBadRequest(w, r, "queue_limit_reached", "")
 		return
 	}
@@ -81,7 +93,7 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 	modelName := shared.GetCache().GetUpscaleModelNameFromID(upscaleReq.ModelId)
 	if modelName == "" {
 		log.Error("Error getting model name", "model_name", modelName)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -157,7 +169,7 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 		remainingCredits, err = c.Repo.GetNonExpiredCreditTotalForUser(user.ID, DB)
 		if err != nil {
 			log.Error("Error getting remaining credits", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return err
 		}
 
@@ -173,6 +185,7 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 			upscaleReq,
 			user.ActiveProductID,
 			false,
+			nil,
 			DB)
 		if err != nil {
 			log.Error("Error creating upscale", "err", err)
@@ -194,6 +207,7 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 			Height:           height,
 			CreatedAt:        upscale.CreatedAt,
 			ProductID:        user.ActiveProductID,
+			Source:           shared.OperationSourceTypeWebUI,
 		}
 
 		// Send to the cog
@@ -228,7 +242,7 @@ func (c *RestAPI) HandleUpscale(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		c.QueueThrottler.IncrementBy(1, user.ID.String())
+		c.QueueThrottler.IncrementBy(1, fmt.Sprintf("u:%s", user.ID.String()))
 
 		return nil
 	}); err != nil {

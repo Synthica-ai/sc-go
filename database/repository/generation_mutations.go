@@ -14,7 +14,7 @@ import (
 
 // CreateGeneration creates the initial generation in the database
 // Takes in a userID (creator),  device info, countryCode, and a request body
-func (r *Repository) CreateGeneration(userID uuid.UUID, deviceType, deviceOs, deviceBrowser, countryCode string, req requests.CreateGenerationRequest, productId *string, DB *ent.Client) (*ent.Generation, error) {
+func (r *Repository) CreateGeneration(userID uuid.UUID, deviceType, deviceOs, deviceBrowser, countryCode string, req requests.CreateGenerationRequest, productId *string, apiTokenId *uuid.UUID, DB *ent.Client) (*ent.Generation, error) {
 	if DB == nil {
 		DB = r.DB
 	}
@@ -45,6 +45,9 @@ func (r *Repository) CreateGeneration(userID uuid.UUID, deviceType, deviceOs, de
 	}
 	if req.PromptStrength != nil {
 		insert.SetPromptStrength(*req.PromptStrength)
+	}
+	if apiTokenId != nil {
+		insert.SetAPITokenID(*apiTokenId)
 	}
 	return insert.Save(r.Ctx)
 }
@@ -107,7 +110,7 @@ func (r *Repository) SetGenerationSucceeded(generationID string, prompt string, 
 		// Get prompt IDs
 		promptId, negativePromptId, err := r.GetOrCreatePrompts(prompt, negativePrompt, db)
 		if err != nil {
-			log.Error("Error getting or creating prompts", "id", generationID, "err", err)
+			log.Error("Error getting or creating prompts", "id", generationID, "err", err, "prompt", prompt, "negativePrompt", negativePrompt)
 			return err
 		}
 

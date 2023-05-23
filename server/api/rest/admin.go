@@ -24,6 +24,47 @@ import (
 )
 
 // Admin-related routes, these must be behind admin middleware and auth middleware
+// HTTP POST - admin ban user
+func (c *RestAPI) HandleBanUser(w http.ResponseWriter, r *http.Request) {
+	if user, email := c.GetUserIDAndEmailIfAuthenticated(w, r); user == nil || email == "" {
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var banUsersReq requests.BanUsersRequest
+	err := json.Unmarshal(reqBody, &banUsersReq)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	if banUsersReq.Action != requests.BanActionBan && banUsersReq.Action != requests.BanActionUnban {
+		responses.ErrBadRequest(w, r, fmt.Sprintf("Unsupported action %s", banUsersReq.Action), "")
+		return
+	}
+
+	var affected int
+	if banUsersReq.Action == requests.BanActionBan {
+		affected, err = c.Repo.BanUsers(banUsersReq.UserIDs)
+		if err != nil {
+			responses.ErrInternalServerError(w, r, err.Error())
+			return
+		}
+	} else {
+		affected, err = c.Repo.UnbanUsers(banUsersReq.UserIDs)
+		if err != nil {
+			responses.ErrInternalServerError(w, r, err.Error())
+			return
+		}
+	}
+
+	res := responses.UpdatedResponse{
+		Updated: affected,
+	}
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, res)
+}
 
 // HTTP POST - admin approve/reject image in gallery
 func (c *RestAPI) HandleReviewGallerySubmission(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +199,7 @@ func (c *RestAPI) HandleQueryGenerationsForAdmin(w http.ResponseWriter, r *http.
 		e, err := c.Clip.GetEmbeddingFromText(search, 2)
 		if err != nil {
 			log.Error("Error getting embedding from clip service", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 
@@ -184,7 +225,7 @@ func (c *RestAPI) HandleQueryGenerationsForAdmin(w http.ResponseWriter, r *http.
 			count, err := c.Qdrant.CountWithFilters(qdrantFilters, false)
 			if err != nil {
 				log.Error("Error counting qdrant", "err", err)
-				responses.ErrInternalServerError(w, r, "An unknown error has occured")
+				responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 				return
 			}
 			total = &count
@@ -194,7 +235,7 @@ func (c *RestAPI) HandleQueryGenerationsForAdmin(w http.ResponseWriter, r *http.
 		qdrantRes, err := c.Qdrant.QueryGenerations(e, perPage, offset, scoreThreshold, qdrantFilters, false, false)
 		if err != nil {
 			log.Error("Error querying qdrant", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 
@@ -213,7 +254,7 @@ func (c *RestAPI) HandleQueryGenerationsForAdmin(w http.ResponseWriter, r *http.
 		generationsUnsorted, err := c.Repo.RetrieveGenerationsWithOutputIDs(outputIds)
 		if err != nil {
 			log.Error("Error getting generations", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 
@@ -313,8 +354,19 @@ func (c *RestAPI) HandleQueryUsers(w http.ResponseWriter, r *http.Request) {
 		productIds = strings.Split(productIdsStr, ",")
 	}
 
+	// Ban status
+	var banned *bool
+	if banStatusStr := r.URL.Query().Get("banned"); banStatusStr != "" {
+		bannedBool, err := strconv.ParseBool(banStatusStr)
+		if err != nil {
+			responses.ErrBadRequest(w, r, "banned must be a boolean", "")
+			return
+		}
+		banned = &bannedBool
+	}
+
 	// Get users
-	users, err := c.Repo.QueryUsers(r.URL.Query().Get("search"), perPage, cursor, productIds)
+	users, err := c.Repo.QueryUsers(r.URL.Query().Get("search"), perPage, cursor, productIds, banned)
 	if err != nil {
 		log.Error("Error getting users", "err", err)
 		responses.ErrInternalServerError(w, r, "Error getting users")
@@ -336,7 +388,7 @@ func (c *RestAPI) HandleQueryCreditTypes(w http.ResponseWriter, r *http.Request)
 	creditTypes, err := c.Repo.GetCreditTypeList()
 	if err != nil {
 		log.Error("Error getting credit types", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -371,7 +423,7 @@ func (c *RestAPI) HandleAddCreditsToUser(w http.ResponseWriter, r *http.Request)
 	creditType, err := c.Repo.GetCreditTypeByID(addReq.CreditTypeID)
 	if err != nil {
 		log.Error("Error getting credit type", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	} else if err == nil && creditType == nil {
 		responses.ErrNotFound(w, r, fmt.Sprintf("Invalid credit type %s", addReq.CreditTypeID.String()))
@@ -381,7 +433,7 @@ func (c *RestAPI) HandleAddCreditsToUser(w http.ResponseWriter, r *http.Request)
 	err = c.Repo.AddCreditsToUser(creditType, addReq.UserID)
 	if err != nil {
 		log.Error("Error adding credits to user", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 

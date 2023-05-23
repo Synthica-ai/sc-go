@@ -61,6 +61,21 @@ func NameInWorker(v string) predicate.Scheduler {
 	return predicate.Scheduler(sql.FieldEQ(FieldNameInWorker, v))
 }
 
+// IsActive applies equality check predicate on the "is_active" field. It's identical to IsActiveEQ.
+func IsActive(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldEQ(FieldIsActive, v))
+}
+
+// IsDefault applies equality check predicate on the "is_default" field. It's identical to IsDefaultEQ.
+func IsDefault(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldEQ(FieldIsDefault, v))
+}
+
+// IsHidden applies equality check predicate on the "is_hidden" field. It's identical to IsHiddenEQ.
+func IsHidden(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldEQ(FieldIsHidden, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Scheduler {
 	return predicate.Scheduler(sql.FieldEQ(FieldCreatedAt, v))
@@ -134,6 +149,36 @@ func NameInWorkerEqualFold(v string) predicate.Scheduler {
 // NameInWorkerContainsFold applies the ContainsFold predicate on the "name_in_worker" field.
 func NameInWorkerContainsFold(v string) predicate.Scheduler {
 	return predicate.Scheduler(sql.FieldContainsFold(FieldNameInWorker, v))
+}
+
+// IsActiveEQ applies the EQ predicate on the "is_active" field.
+func IsActiveEQ(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldEQ(FieldIsActive, v))
+}
+
+// IsActiveNEQ applies the NEQ predicate on the "is_active" field.
+func IsActiveNEQ(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldNEQ(FieldIsActive, v))
+}
+
+// IsDefaultEQ applies the EQ predicate on the "is_default" field.
+func IsDefaultEQ(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldEQ(FieldIsDefault, v))
+}
+
+// IsDefaultNEQ applies the NEQ predicate on the "is_default" field.
+func IsDefaultNEQ(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldNEQ(FieldIsDefault, v))
+}
+
+// IsHiddenEQ applies the EQ predicate on the "is_hidden" field.
+func IsHiddenEQ(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldEQ(FieldIsHidden, v))
+}
+
+// IsHiddenNEQ applies the NEQ predicate on the "is_hidden" field.
+func IsHiddenNEQ(v bool) predicate.Scheduler {
+	return predicate.Scheduler(sql.FieldNEQ(FieldIsHidden, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

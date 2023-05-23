@@ -30,6 +30,7 @@ import (
 	"github.com/stablecog/sc-go/server/clip"
 	"github.com/stablecog/sc-go/server/discord"
 	"github.com/stablecog/sc-go/server/middleware"
+	"github.com/stablecog/sc-go/server/requests"
 	"github.com/stablecog/sc-go/shared"
 	"github.com/stablecog/sc-go/uploadapi/api"
 	"github.com/stablecog/sc-go/utils"
@@ -217,6 +218,7 @@ func main() {
 	s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 100)
 
 	// Create controller
+	apiTokenSmap := shared.NewSyncMap[chan requests.CogWebhookMessage]()
 	hc := rest.RestAPI{
 		Repo:           repo,
 		Redis:          redis,
@@ -228,6 +230,7 @@ func main() {
 		Qdrant:         qdrantClient,
 		Meili:          database.NewMeiliSearchClient(),
 		Clip:           clip.NewClipService(redis),
+		SMap:           apiTokenSmap,
 	}
 
 	// Create middleware
@@ -254,7 +257,7 @@ func main() {
 			r.Get("/health", hc.HandleHealth)
 			r.Route("/", func(r chi.Router) {
 				r.Use(middleware.Logger)
-				r.Use(mw.RateLimit(2, 1*time.Second))
+				r.Use(mw.RateLimit(2, "srv", 1*time.Second))
 				r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
 				r.Post("/", hu.HandleUpload)
 			})
@@ -266,7 +269,7 @@ func main() {
 		r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
 		r.Use(middleware.Logger)
 
-		r.Use(mw.RateLimit(10, 1*time.Second))
+		r.Use(mw.RateLimit(10, "srv", 1*time.Second))
 
 		// Query credits
 		r.Post("/api/ask", hc.HandleAiChatAsk)
@@ -284,11 +287,13 @@ func main() {
 
 		// Stripe
 		r.Route("/stripe", func(r chi.Router) {
+			r.Use(middleware.Logger)
 			r.Post("/webhook", hc.HandleStripeWebhook)
 		})
 
 		// SCWorker
 		r.Route("/worker", func(r chi.Router) {
+			r.Use(middleware.Logger)
 			r.Post("/webhook", hc.HandleSCWorkerWebhook)
 		})
 
@@ -296,7 +301,7 @@ func main() {
 		r.Route("/stats", func(r chi.Router) {
 			r.Use(middleware.Logger)
 			// 10 requests per second
-			r.Use(mw.RateLimit(10, 1*time.Second))
+			r.Use(mw.RateLimit(10, "srv", 1*time.Second))
 			r.Get("/", hc.HandleGetStats)
 		})
 
@@ -304,7 +309,7 @@ func main() {
 		r.Route("/gallery", func(r chi.Router) {
 			r.Use(middleware.Logger)
 			// 20 requests per second
-			r.Use(mw.RateLimit(20, 1*time.Second))
+			r.Use(mw.RateLimit(20, "srv", 1*time.Second))
 			r.Get("/", hc.HandleQueryGallery)
 		})
 
@@ -313,7 +318,7 @@ func main() {
 			r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
 			r.Use(middleware.Logger)
 			// 10 requests per second
-			r.Use(mw.RateLimit(10, 1*time.Second))
+			r.Use(mw.RateLimit(10, "srv", 1*time.Second))
 
 			// Get user summary
 			r.Get("/", hc.HandleGetUser)
@@ -342,6 +347,14 @@ func main() {
 			r.Post("/subscription/downgrade", hc.HandleSubscriptionDowngrade)
 			r.Post("/subscription/checkout", hc.HandleCreateCheckoutSession)
 			r.Post("/subscription/portal", hc.HandleCreatePortalSession)
+
+			// API Tokens
+			r.Post("/tokens", hc.HandleNewAPIToken)
+			r.Get("/tokens", hc.HandleGetAPITokens)
+			r.Delete("/tokens", hc.HandleDeactivateAPIToken)
+
+			// Operations
+			r.Get("/operations", hc.HandleQueryOperations)
 		})
 
 		// Admin only routes
@@ -362,6 +375,7 @@ func main() {
 				r.Use(mw.AuthMiddleware(middleware.AuthLevelSuperAdmin))
 				r.Use(middleware.Logger)
 				r.Get("/", hc.HandleQueryUsers)
+				r.Post("/ban", hc.HandleBanUser)
 			})
 			r.Route("/credit", func(r chi.Router) {
 				r.Use(mw.AuthMiddleware(middleware.AuthLevelSuperAdmin))
@@ -369,6 +383,28 @@ func main() {
 				r.Get("/types", hc.HandleQueryCreditTypes)
 				r.Post("/add", hc.HandleAddCreditsToUser)
 			})
+		})
+
+		// Settings
+		r.Route("/settings", func(r chi.Router) {
+			r.Use(middleware.Logger)
+			r.Use(mw.RateLimit(10, "srv", 1*time.Second))
+			r.Get("/", hc.HandleGetSettings)
+		})
+
+		// Api token route
+		r.Route("/generate", func(r chi.Router) {
+			r.Use(mw.AuthMiddleware(middleware.AuthLevelAPIToken))
+			r.Use(middleware.Logger)
+			r.Use(mw.RateLimit(5, "api", 1*time.Second))
+			r.Post("/", hc.HandleCreateGenerationToken)
+		})
+
+		r.Route("/upscale", func(r chi.Router) {
+			r.Use(mw.AuthMiddleware(middleware.AuthLevelAPIToken))
+			r.Use(middleware.Logger)
+			r.Use(mw.RateLimit(5, "api", 1*time.Second))
+			r.Post("/", hc.HandleCreateUpscaleToken)
 		})
 	})
 
@@ -402,6 +438,29 @@ func main() {
 			sseMessage.LivePageMessage = nil
 			// The hub will broadcast this to our clients if it's supposed to
 			sseHub.BroadcastStatusUpdate(sseMessage)
+		}
+	}()
+
+	// This redis subscription has the following purpose:
+	// For API token requests, they are synchronous with API requests
+	// so we need to send the response back to the appropriate channel
+	apiTokenChannel := redis.Client.Subscribe(ctx, shared.REDIS_APITOKEN_COG_CHANNEL)
+	defer apiTokenChannel.Close()
+
+	// Start SSE redis subscription
+	go func() {
+		log.Info("Listening for api messages", "channel", shared.REDIS_APITOKEN_COG_CHANNEL)
+		for msg := range apiTokenChannel.Channel() {
+			var cogMessage requests.CogWebhookMessage
+			err := json.Unmarshal([]byte(msg.Payload), &cogMessage)
+			if err != nil {
+				log.Error("Error unmarshalling cog webhook message", "err", err)
+				continue
+			}
+
+			if chl := apiTokenSmap.Get(cogMessage.Input.ID); chl != nil {
+				chl <- cogMessage
+			}
 		}
 	}()
 

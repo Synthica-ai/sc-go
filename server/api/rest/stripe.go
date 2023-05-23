@@ -77,7 +77,7 @@ func (c *RestAPI) HandleCreatePortalSession(w http.ResponseWriter, r *http.Reque
 
 	if err != nil {
 		log.Error("Error creating portal session", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -148,7 +148,7 @@ func (c *RestAPI) HandleCreateCheckoutSession(w http.ResponseWriter, r *http.Req
 
 	if err != nil {
 		log.Error("Error getting customer", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -208,10 +208,11 @@ func (c *RestAPI) HandleCreateCheckoutSession(w http.ResponseWriter, r *http.Req
 				Quantity: stripe.Int64(1),
 			},
 		},
-		Mode:       stripe.String(string(mode)),
-		SuccessURL: stripe.String(stripeReq.SuccessUrl),
-		CancelURL:  stripe.String(stripeReq.CancelUrl),
-		Currency:   stripe.String(stripeReq.Currency),
+		Mode:                stripe.String(string(mode)),
+		SuccessURL:          stripe.String(stripeReq.SuccessUrl),
+		CancelURL:           stripe.String(stripeReq.CancelUrl),
+		Currency:            stripe.String(stripeReq.Currency),
+		AllowPromotionCodes: stripe.Bool(true),
 	}
 	if adhocPrice {
 		params.PaymentIntentData = &stripe.CheckoutSessionPaymentIntentDataParams{
@@ -224,7 +225,7 @@ func (c *RestAPI) HandleCreateCheckoutSession(w http.ResponseWriter, r *http.Req
 	session, err := c.StripeClient.CheckoutSessions.New(params)
 	if err != nil {
 		log.Error("Error creating checkout session", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -279,7 +280,7 @@ func (c *RestAPI) HandleSubscriptionDowngrade(w http.ResponseWriter, r *http.Req
 
 	if err != nil {
 		log.Error("Error getting customer", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -342,7 +343,7 @@ func (c *RestAPI) HandleSubscriptionDowngrade(w http.ResponseWriter, r *http.Req
 
 	if err != nil {
 		log.Error("Error updating subscription", "err", err)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -492,6 +493,20 @@ func (c *RestAPI) HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if invoice.Status == InvoiceStatusOpen {
+			// Get payment intent
+			pi, err := c.StripeClient.PaymentIntents.Get(invoice.PaymentIntent, nil)
+			if err != nil {
+				log.Error("Unable getting payment intent", "err", err)
+				responses.ErrInternalServerError(w, r, err.Error())
+				return
+			}
+			if pi.Status == stripe.PaymentIntentStatusRequiresConfirmation || pi.Status == stripe.PaymentIntentStatusRequiresAction || pi.Status == stripe.PaymentIntentStatusCanceled || pi.Status == stripe.PaymentIntentStatusRequiresPaymentMethod {
+				c.RevertCreditsInvoice(invoice, w, r)
+				return
+			}
+		}
+
 		// We only care about renewal (cycle), create, and manual
 		if invoice.BillingReason != InvoiceBillingReasonSubscriptionCycle && invoice.BillingReason != InvoiceBillingReasonSubscriptionCreate {
 			render.Status(r, http.StatusOK)
@@ -557,7 +572,6 @@ func (c *RestAPI) HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 				added, err := c.Repo.AddCreditsIfEligible(creditType, user.ID, expiresAt, line.ID, client)
 				if err != nil {
 					log.Error("Unable adding credits to user %s: %v", user.ID.String(), err)
-					responses.ErrInternalServerError(w, r, err.Error())
 					return err
 				}
 				if user.ActiveProductID == nil && added {
@@ -592,12 +606,18 @@ func (c *RestAPI) HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 				err = c.Repo.SetActiveProductID(user.ID, product, client)
 				if err != nil {
 					log.Error("Unable setting stripe product id for user %s: %v", user.ID.String(), err)
-					responses.ErrInternalServerError(w, r, err.Error())
 					return err
 				}
 				return nil
 			}); err != nil {
 				log.Error("Unable adding credits to user %s: %v", user.ID.String(), err)
+				if ent.IsConstraintError(err) {
+					// Ignore
+					render.Status(r, http.StatusOK)
+					render.PlainText(w, r, "OK")
+					return
+				}
+				responses.ErrInternalServerError(w, r, err.Error())
 				return
 			}
 		}
@@ -682,6 +702,12 @@ func (c *RestAPI) HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 		added, err := c.Repo.AddAdhocCreditsIfEligible(creditType, user.ID, pi.ID)
 		if err != nil {
 			log.Error("Unable adding credits to user %s: %v", user.ID.String(), err)
+			if ent.IsConstraintError(err) {
+				// Ignore
+				render.Status(r, http.StatusOK)
+				render.PlainText(w, r, "OK")
+				return
+			}
 			responses.ErrInternalServerError(w, r, err.Error())
 			return
 		}
@@ -876,7 +902,9 @@ type Invoice struct {
 	BillingReason InvoiceBillingReason `json:"billing_reason"`
 	Lines         *InvoiceLineList     `json:"lines"`
 	Customer      string               `json:"customer"`
+	PaymentIntent string               `json:"payment_intent"`
 	Status        InvoiceStatus        `json:"status"`
+	Currency      string               `json:"currency"`
 }
 
 // Subscription object is also pbroken in stripe

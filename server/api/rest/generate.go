@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
 	"github.com/stablecog/sc-go/database/ent"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
@@ -82,11 +83,24 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Validation
-	err = generateReq.Validate()
-	if err != nil {
-		responses.ErrBadRequest(w, r, err.Error(), "")
+	if user.BannedAt != nil {
+		remainingCredits, _ := c.Repo.GetNonExpiredCreditTotalForUser(user.ID, nil)
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, &responses.TaskQueuedResponse{
+			ID:               uuid.NewString(),
+			UIId:             generateReq.UIId,
+			RemainingCredits: remainingCredits,
+		})
 		return
+	}
+
+	// Validation (skip for super admin)
+	if !isSuperAdmin {
+		err = generateReq.Validate(false)
+		if err != nil {
+			responses.ErrBadRequest(w, r, err.Error(), "")
+			return
+		}
 	}
 
 	// The URL we send worker
@@ -114,7 +128,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 					return
 				default:
 					log.Error("Error checking if init image exists in bucket", "err", err)
-					responses.ErrInternalServerError(w, r, "An unknown error has occured")
+					responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 					return
 				}
 			}
@@ -129,18 +143,18 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 		urlStr, err := req.Presign(5 * time.Minute)
 		if err != nil {
 			log.Error("Error signing init image URL", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return
 		}
 		signedInitImageUrl = urlStr
 	}
 
 	// Get queue count
-	nq, err := c.QueueThrottler.NumQueued(user.ID.String())
+	nq, err := c.QueueThrottler.NumQueued(fmt.Sprintf("g:%s", user.ID.String()))
 	if err != nil {
 		log.Warn("Error getting queue count", "err", err, "user_id", user.ID.String())
 	}
-	if err == nil && nq > qMax {
+	if err == nil && nq >= qMax {
 		responses.ErrBadRequest(w, r, "queue_limit_reached", "")
 		return
 	}
@@ -161,7 +175,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 	schedulerName := shared.GetCache().GetSchedulerNameFromID(generateReq.SchedulerId)
 	if modelName == "" || schedulerName == "" {
 		log.Error("Error getting model or scheduler name: %s - %s", modelName, schedulerName)
-		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -198,7 +212,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 		remainingCredits, err = c.Repo.GetNonExpiredCreditTotalForUser(user.ID, DB)
 		if err != nil {
 			log.Error("Error getting remaining credits", "err", err)
-			responses.ErrInternalServerError(w, r, "An unknown error has occured")
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 			return err
 		}
 
@@ -211,6 +225,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 			countryCode,
 			generateReq,
 			user.ActiveProductID,
+			nil,
 			DB)
 		if err != nil {
 			log.Error("Error creating generation", "err", err)
@@ -223,7 +238,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 
 		// For live page update
 		livePageMsg = shared.LivePageMessage{
-			ProcessType:      generateReq.ProcessType,
+			ProcessType:      shared.GENERATE,
 			ID:               utils.Sha256(requestId),
 			CountryCode:      countryCode,
 			Status:           shared.LivePageQueued,
@@ -232,6 +247,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 			Height:           generateReq.Height,
 			CreatedAt:        g.CreatedAt,
 			ProductID:        user.ActiveProductID,
+			Source:           shared.OperationSourceTypeWebUI,
 		}
 
 		var promtpStrengthStr string
@@ -264,7 +280,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 				NumOutputs:           fmt.Sprint(generateReq.NumOutputs),
 				OutputImageExtension: string(shared.DEFAULT_GENERATE_OUTPUT_EXTENSION),
 				OutputImageQuality:   fmt.Sprint(shared.DEFAULT_GENERATE_OUTPUT_QUALITY),
-				ProcessType:          generateReq.ProcessType,
+				ProcessType:          shared.GENERATE,
 				SubmitToGallery:      generateReq.SubmitToGallery,
 				InitImageUrl:         signedInitImageUrl,
 				PromptStrength:       promtpStrengthStr,
@@ -282,7 +298,7 @@ func (c *RestAPI) HandleCreateGeneration(w http.ResponseWriter, r *http.Request)
 			return err
 		}
 
-		c.QueueThrottler.IncrementBy(int(generateReq.NumOutputs), user.ID.String())
+		c.QueueThrottler.IncrementBy(1, fmt.Sprintf("g:%s", user.ID.String()))
 		return nil
 	}); err != nil {
 		log.Error("Error in transaction", "err", err)

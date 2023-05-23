@@ -25,6 +25,9 @@ func (User) Fields() []ent.Field {
 		field.Text("active_product_id").Optional().Nillable(),
 		field.Time("last_sign_in_at").Optional().Nillable(),
 		field.Time("last_seen_at").Default(time.Now),
+		field.Time("banned_at").Optional().Nillable(),
+		field.Time("scheduled_for_deletion_on").Optional().Nillable(),
+		field.Time("data_deleted_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}
@@ -50,6 +53,11 @@ func (User) Edges() []ent.Edge {
 			}),
 		// O2M with credits
 		edge.To("credits", Credit.Type).
+			Annotations(entsql.Annotation{
+				OnDelete: entsql.Cascade,
+			}),
+		// O2M with api_tokens
+		edge.To("api_tokens", ApiToken.Type).
 			Annotations(entsql.Annotation{
 				OnDelete: entsql.Cascade,
 			}),

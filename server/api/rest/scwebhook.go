@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
+	"github.com/stablecog/sc-go/database/ent"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
 	"github.com/stablecog/sc-go/server/requests"
@@ -33,6 +34,15 @@ func (c *RestAPI) HandleSCWorkerWebhook(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Errorf("Failed to parse COG webhook message, %v", err)
 		responses.ErrUnableToParseJson(w, r)
+		return
+	} else if cogMessage.Input.APIRequest {
+		// API request handled in a separate flow
+		err = c.Redis.Client.Publish(c.Redis.Ctx, shared.REDIS_APITOKEN_COG_CHANNEL, reqBody).Err()
+		if err != nil {
+			log.Error("Failed to publish API worker msg", "err", err)
+		}
+		render.Status(r, http.StatusOK)
+		render.PlainText(w, r, "OK")
 		return
 	}
 
@@ -166,7 +176,14 @@ func (c *RestAPI) HandleSCWorkerWebhook(w http.ResponseWriter, r *http.Request) 
 	err = c.Repo.ProcessCogMessage(cogMessage)
 	if err != nil {
 		log.Error("Error processing COG message", "err", err)
+		if ent.IsConstraintError(err) {
+			// Squish
+			render.Status(r, http.StatusOK)
+			render.PlainText(w, r, "OK")
+			return
+		}
 		responses.ErrInternalServerError(w, r, "server error")
+		return
 	}
 
 	render.Status(r, http.StatusOK)
