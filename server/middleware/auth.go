@@ -32,8 +32,11 @@ func (m *Middleware) AuthMiddleware(level AuthLevel) func(next http.Handler) htt
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := strings.Split(r.Header.Get("Authorization"), "Bearer ")
 			if len(authHeader) != 2 {
-				responses.ErrUnauthorized(w, r)
-				return
+				authHeader = strings.Split(r.Header.Get("Authorization"), "DevKey ")
+				if len(authHeader) != 2 {
+					responses.ErrUnauthorized(w, r)
+					return
+				}
 			}
 
 			var userId, email string
@@ -86,12 +89,6 @@ func (m *Middleware) AuthMiddleware(level AuthLevel) func(next http.Handler) htt
 						responses.ErrUnauthorized(w, r)
 						return
 					}
-				}
-
-				userId, email, lastSignIn, err = m.SupabaseAuth.GetSupabaseUserIdFromAccessToken(authHeader[1])
-				if err != nil {
-					responses.ErrUnauthorized(w, r)
-					return
 				}
 			}
 
