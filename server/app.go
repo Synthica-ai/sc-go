@@ -273,6 +273,8 @@ func main() {
 
 		// Query credits
 		r.Post("/api/ask", hc.HandleAiChatAsk)
+
+		r.Post("/api/suggest-title", hc.HandleAiChatTitle)
 	})
 
 	app.Route("/v1", func(r chi.Router) {
