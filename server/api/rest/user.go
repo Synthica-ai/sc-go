@@ -385,6 +385,31 @@ func (c *RestAPI) HandleQueryGenerations(w http.ResponseWriter, r *http.Request)
 	render.JSON(w, r, generations)
 }
 
+type AskBodySettings struct {
+	Model       string `json:"model,omitempty"`
+	MaxTokens   int    `json:"max_tokens,omitempty"`
+	Temperature int    `json:"temperature,omitempty"`
+	TopP        int    `json:"top_p,omitempty"`
+}
+
+type AskBody struct {
+	AskBodyOpenAI
+
+	Settings AskBodySettings `json:"settings,omitempty"`
+}
+
+type AskBodyOpenAI struct {
+	Messages []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"messages"`
+	Model       string `json:"model,omitempty"`
+	MaxTokens   int    `json:"max_tokens,omitempty"`
+	Temperature int    `json:"temperature,omitempty"`
+	TopP        int    `json:"top_p,omitempty"`
+	Stream      bool   `json:"stream"`
+}
+
 func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
 	var user *ent.User
 	if user = c.GetUserIfAuthenticated(w, r); user == nil {
@@ -461,7 +486,7 @@ func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Proxy part
-	originServerURL, err := url.Parse("https://synthica.ai")
+	originServerURL, err := url.Parse("https://api.openai.com/v1/chat/completions")
 	if err != nil {
 		log.Fatal("invalid origin server URL")
 	}
@@ -470,7 +495,31 @@ func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
 	r.Host = originServerURL.Host
 	r.URL.Host = originServerURL.Host
 	r.URL.Scheme = originServerURL.Scheme
+	r.URL.Path = originServerURL.Path
+	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_KEY")))
 	r.RequestURI = ""
+
+	// Rewrite body
+	var askBody AskBody
+	err = json.NewDecoder(r.Body).Decode(&askBody)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	askBody.Model = askBody.Settings.Model
+	askBody.MaxTokens = askBody.Settings.MaxTokens
+	askBody.Temperature = askBody.Settings.Temperature
+	askBody.TopP = askBody.Settings.TopP
+	askBody.Stream = true
+
+	newBody, _ := json.Marshal(askBody.AskBodyOpenAI)
+
+	newBodyStr := string(newBody)
+
+	// newBodyStr = `{"messages":[{"role":"user","content":"Say this is a test!"}],"model":"gpt-3.5-turbo","max_tokens":2048,"temperature":1,"top_p":1,"stream":true}`
+	r.Body = ioutil.NopCloser(strings.NewReader(newBodyStr))
+	r.ContentLength = int64(len(newBodyStr))
 
 	// save the response from the origin server
 	originServerResponse, err := http.DefaultClient.Do(r)
