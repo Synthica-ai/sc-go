@@ -336,30 +336,31 @@ func main() {
 		}
 	}
 
-	// rewriteBody := func(resp *http.Response) (err error) {
-	// 	b, err := ioutil.ReadAll(resp.Body) //Read html
-	// 	if err != nil {
-	// 		return err
-	// 	}
+	rewriteBody := func(resp *http.Response) (err error) {
+		// b, err := ioutil.ReadAll(resp.Body) //Read html
+		// if err != nil {
+		// 	return err
+		// }
 
-	// 	err = resp.Body.Close()
-	// 	if err != nil {
-	// 		return err
-	// 	}
+		// err = resp.Body.Close()
+		// if err != nil {
+		// 	return err
+		// }
 
-	// 	respTokens := bytes.Count(b, []byte{'\n'})
+		// respTokens := bytes.Count(b, []byte{'\n'})
 
-	// 	fmt.Println(respTokens)
+		// fmt.Println(respTokens)
 
-	// 	body := ioutil.NopCloser(bytes.NewReader(b))
-	// 	resp.Body = body
-	// 	resp.ContentLength = int64(len(b))
-	// 	resp.Header.Set("Content-Length", strconv.Itoa(len(b)))
-	// 	return nil
-	// }
+		// body := ioutil.NopCloser(bytes.NewReader(b))
+		// resp.Body = body
+		// resp.ContentLength = int64(len(b))
+		// resp.Header.Set("Content-Length", strconv.Itoa(len(b)))
+		resp.Header.Del("access-control-allow-origin")
+		return nil
+	}
 
 	proxy := httputil.NewSingleHostReverseProxy(originServerURL)
-	// proxy.ModifyResponse = rewriteBody
+	proxy.ModifyResponse = rewriteBody
 
 	// Routes that require authentication
 	app.Route("/ai-chat", func(r chi.Router) {
