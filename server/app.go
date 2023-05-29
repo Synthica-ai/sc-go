@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -38,6 +42,31 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
+
+type AskBodySettings struct {
+	Model       string `json:"model,omitempty"`
+	MaxTokens   int    `json:"max_tokens,omitempty"`
+	Temperature int    `json:"temperature,omitempty"`
+	TopP        int    `json:"top_p,omitempty"`
+}
+
+type AskBodyOpenAI struct {
+	Messages []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"messages"`
+	Model       string `json:"model,omitempty"`
+	MaxTokens   int    `json:"max_tokens,omitempty"`
+	Temperature int    `json:"temperature,omitempty"`
+	TopP        int    `json:"top_p,omitempty"`
+	Stream      bool   `json:"stream"`
+}
+
+type AskBody struct {
+	AskBodyOpenAI
+
+	Settings AskBodySettings `json:"settings,omitempty"`
+}
 
 var Version = "dev"
 var CommitMsg = "dev"
@@ -264,6 +293,50 @@ func main() {
 		})
 	})
 
+	originServerURL, err := url.Parse("https://api.openai.com")
+	if err != nil {
+		log.Fatal("invalid origin server URL")
+	}
+
+	handler := func(p *httputil.ReverseProxy) func(http.ResponseWriter, *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
+			// set req Host, URL and Request URI to forward a request to the origin server
+			r.Host = originServerURL.Host
+			r.URL.Host = originServerURL.Host
+			r.URL.Scheme = originServerURL.Scheme
+			r.URL.Path = "/v1/chat/completions"
+			r.Header = http.Header{}
+			r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_KEY")))
+			r.Header.Set("content-type", "application/json")
+			r.Header.Set("Accept", "application/json")
+			r.RequestURI = ""
+
+			// Rewrite body
+			var askBody AskBody
+			err = json.NewDecoder(r.Body).Decode(&askBody)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			askBody.Model = askBody.Settings.Model
+			askBody.MaxTokens = askBody.Settings.MaxTokens
+			askBody.Temperature = askBody.Settings.Temperature
+			askBody.TopP = askBody.Settings.TopP
+			askBody.Stream = true
+
+			newBody, _ := json.Marshal(askBody.AskBodyOpenAI)
+			newBodyStr := string(newBody)
+
+			r.Body = ioutil.NopCloser(strings.NewReader(newBodyStr))
+			r.ContentLength = int64(len(newBodyStr))
+
+			p.ServeHTTP(w, r)
+		}
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(originServerURL)
+
 	// Routes that require authentication
 	app.Route("/ai-chat", func(r chi.Router) {
 		r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
@@ -272,7 +345,7 @@ func main() {
 		r.Use(mw.RateLimit(10, "srv", 1*time.Second))
 
 		// Query credits
-		r.Post("/api/ask", hc.HandleAiChatAsk)
+		r.Post("/api/ask", handler(proxy))
 
 		r.Post("/api/suggest-title", hc.HandleAiChatTitle)
 	})
