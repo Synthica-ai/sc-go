@@ -1,11 +1,14 @@
 package rest
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"strconv"
@@ -627,217 +630,215 @@ func (c *RestAPI) HandleAiChatTitle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
-	// Proxy part
-	originServerURL, err := url.Parse("https://api.openai.com/v1/chat/completions")
-	if err != nil {
-		log.Fatal("invalid origin server URL")
+func (c *RestAPI) HandleAiChatAsk(p *httputil.ReverseProxy) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var user *ent.User
+		if user = c.GetUserIfAuthenticated(w, r); user == nil {
+			return
+		}
+
+		numTokens := 5
+		deducted := true
+		if err := c.Repo.WithTx(func(tx *ent.Tx) error {
+			DB := tx.Client()
+
+			avTokens, err := c.Repo.GetChatTokens(user.ID, DB, r.Context())
+			if err != nil {
+				responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+				return err
+			}
+
+			newTokens := 0
+			spendCredits := 0
+			if avTokens < numTokens {
+				tmpTokens := numTokens - avTokens
+				if tmpTokens > 1000 {
+					spendCredits = tmpTokens / 1000
+					newTokens = tmpTokens % 1000
+				} else {
+					newTokens = 1000 - tmpTokens
+					spendCredits = 1
+				}
+
+			} else {
+				newTokens = avTokens - numTokens
+			}
+
+			err = c.Repo.UpdateChatTokens(user.ID, DB, newTokens, r.Context())
+			if err != nil {
+				responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+				return err
+			}
+
+			if spendCredits == 0 {
+				return nil
+			}
+
+			// Deduct credits from user
+			deducted, err = c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
+			if err != nil {
+				log.Error("Error deducting credits", "err", err)
+				responses.ErrInternalServerError(w, r, "Error deducting credits from user")
+				return err
+			} else if !deducted {
+				c.Repo.UpdateChatTokens(user.ID, DB, 0, r.Context())
+			}
+
+			return nil
+		}); err != nil {
+			log.Error("Error in transaction", "err", err)
+			return
+		}
+
+		if !deducted {
+			responses.ErrInsufficientCredits(w, r)
+			return
+		}
+
+		originServerURL, err := url.Parse("https://api.openai.com")
+		if err != nil {
+			log.Fatal("invalid origin server URL")
+		}
+
+		r.Host = originServerURL.Host
+		r.URL.Host = originServerURL.Host
+		r.URL.Scheme = originServerURL.Scheme
+		r.URL.Path = "/v1/chat/completions"
+		r.Header = http.Header{}
+		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_KEY")))
+		r.Header.Set("content-type", "application/json")
+		r.Header.Set("Accept", "application/json")
+		r.Header.Set("origin", "https://synthica.ai")
+		r.RequestURI = ""
+
+		// Rewrite body
+		var askBody AskBody
+		err = json.NewDecoder(r.Body).Decode(&askBody)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		askBody.Model = askBody.Settings.Model
+		askBody.MaxTokens = askBody.Settings.MaxTokens
+		askBody.Temperature = askBody.Settings.Temperature
+		askBody.TopP = askBody.Settings.TopP
+		askBody.Stream = true
+
+		newBody, _ := json.Marshal(askBody.AskBodyOpenAI)
+		newBodyStr := string(newBody)
+
+		r.Body = ioutil.NopCloser(strings.NewReader(newBodyStr))
+		r.ContentLength = int64(len(newBodyStr))
+
+		p.ServeHTTP(w, r)
 	}
-
-	// set req Host, URL and Request URI to forward a request to the origin server
-	r.Host = originServerURL.Host
-	r.URL.Host = originServerURL.Host
-	r.URL.Scheme = originServerURL.Scheme
-	r.URL.Path = originServerURL.Path
-	r.Header = http.Header{}
-	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_KEY")))
-	r.Header.Set("content-type", "application/json")
-	r.Header.Set("Accept", "application/json")
-	r.RequestURI = ""
-
-	// Rewrite body
-	var askBody AskBody
-	err = json.NewDecoder(r.Body).Decode(&askBody)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	askBody.Model = askBody.Settings.Model
-	askBody.MaxTokens = askBody.Settings.MaxTokens
-	askBody.Temperature = askBody.Settings.Temperature
-	askBody.TopP = askBody.Settings.TopP
-	askBody.Stream = true
-
-	newBody, _ := json.Marshal(askBody.AskBodyOpenAI)
-	newBodyStr := string(newBody)
-
-	r.Body = ioutil.NopCloser(strings.NewReader(newBodyStr))
-	r.ContentLength = int64(len(newBodyStr))
-
-	// save the response from the origin server
-	originServerResponse, err := http.DefaultClient.Do(r)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = fmt.Fprint(w, err)
-		return
-	}
-
-	// return response to the client
-	w.WriteHeader(http.StatusOK)
-	io.Copy(w, originServerResponse.Body)
 }
 
-// func (c *RestAPI) HandleAiChatAsk(w http.ResponseWriter, r *http.Request) {
-// 	var user *ent.User
-// 	if user = c.GetUserIfAuthenticated(w, r); user == nil {
-// 		return
-// 	}
+type contextWithoutDeadline struct {
+	ctx context.Context
+}
 
-// 	text := "Hello, world!"
-// 	encoding := "cl100k_base"
+func (*contextWithoutDeadline) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (*contextWithoutDeadline) Done() <-chan struct{}       { return nil }
+func (*contextWithoutDeadline) Err() error                  { return nil }
 
-// 	tke, err := tiktoken.GetEncoding(encoding)
-// 	if err != nil {
-// 		err = fmt.Errorf("getEncoding: %v", err)
-// 		return
-// 	}
+func (l *contextWithoutDeadline) Value(key interface{}) interface{} {
+	return l.ctx.Value(key)
+}
 
-// 	token := tke.Encode(text, nil, nil)
-// 	numTokens := len(token)
+func (c *RestAPI) HandleAiChatAskResponse(resp *http.Response) (err error) {
+	var (
+		buf        bytes.Buffer
+		respTokens int
+	)
 
-// 	deducted := true
-// 	if err := c.Repo.WithTx(func(tx *ent.Tx) error {
-// 		DB := tx.Client()
+	userIDStr := resp.Request.Context().Value("user_id").(string)
+	// Parse to UUID
+	userUUID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return err
+	}
 
-// 		avTokens, err := c.Repo.GetChatTokens(user.ID, DB, r.Context())
-// 		if err != nil {
-// 			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
-// 			return err
-// 		}
+	tee := io.TeeReader(resp.Body, &buf)
 
-// 		newTokens := 0
-// 		spendCredits := 0
-// 		if avTokens < numTokens {
-// 			tmpTokens := numTokens - avTokens
-// 			if tmpTokens > 1000 {
-// 				spendCredits = tmpTokens / 1000
-// 				newTokens = tmpTokens % 1000
-// 			} else {
-// 				newTokens = 1000 - tmpTokens
-// 				spendCredits = 1
-// 			}
+	resp.Body = ioutil.NopCloser(tee)
 
-// 		} else {
-// 			newTokens = avTokens - numTokens
-// 		}
+	bctx := &contextWithoutDeadline{resp.Request.Context()}
 
-// 		err = c.Repo.UpdateChatTokens(user.ID, DB, newTokens, r.Context())
-// 		if err != nil {
-// 			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
-// 			return err
-// 		}
+	go func() {
+		for {
+			time.Sleep(time.Second * 2)
 
-// 		if spendCredits == 0 {
-// 			return nil
-// 		}
+			bb, _ := ioutil.ReadAll(&buf)
+			tokens := bytes.Count(bb, []byte{'\n'})
 
-// 		// Deduct credits from user
-// 		deducted, err = c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
-// 		if err != nil {
-// 			log.Error("Error deducting credits", "err", err)
-// 			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
-// 			return err
-// 		} else if !deducted {
-// 			c.Repo.UpdateChatTokens(user.ID, DB, 0, r.Context())
-// 		}
+			respTokens += tokens
 
-// 		return nil
-// 	}); err != nil {
-// 		log.Error("Error in transaction", "err", err)
-// 		return
-// 	}
+			fmt.Println(respTokens)
 
-// 	if !deducted {
-// 		responses.ErrInsufficientCredits(w, r)
-// 		return
-// 	}
+			if tokens == 0 {
+				break
+			}
+		}
 
-// 	// Proxy part
-// 	originServerURL, err := url.Parse("https://synthica.ai")
-// 	if err != nil {
-// 		log.Fatal("invalid origin server URL")
-// 	}
+		respTokens = (respTokens - 2) / 2
 
-// 	// set req Host, URL and Request URI to forward a request to the origin server
-// 	r.Host = originServerURL.Host
-// 	r.URL.Host = originServerURL.Host
-// 	r.URL.Scheme = originServerURL.Scheme
-// 	r.RequestURI = ""
+		if err = c.Repo.WithTx(func(tx *ent.Tx) error {
+			DB := tx.Client()
 
-// 	// save the response from the origin server
-// 	originServerResponse, err := http.DefaultClient.Do(r)
-// 	if err != nil {
-// 		w.WriteHeader(http.StatusInternalServerError)
-// 		_, _ = fmt.Fprint(w, err)
-// 		return
-// 	}
+			avTokens, err := c.Repo.GetChatTokens(userUUID, DB, bctx)
+			if err != nil {
+				return err
+			}
 
-// 	var (
-// 		buf        bytes.Buffer
-// 		respTokens int
-// 	)
-// 	tee := io.TeeReader(originServerResponse.Body, &buf)
+			newTokens := 0
+			spendCredits := 0
+			if avTokens < respTokens {
+				tmpTokens := respTokens - avTokens
+				if tmpTokens > 1000 {
+					spendCredits = tmpTokens / 1000
+					newTokens = tmpTokens % 1000
+				} else {
+					newTokens = 1000 - tmpTokens
+					spendCredits = 1
+				}
 
-// 	// return response to the client
-// 	w.WriteHeader(http.StatusOK)
-// 	io.Copy(w, tee)
+			} else {
+				newTokens = avTokens - respTokens
+			}
 
-// 	bb, _ := ioutil.ReadAll(&buf)
-// 	respTokens = bytes.Count(bb, []byte{'\n'})
+			err = c.Repo.UpdateChatTokens(userUUID, DB, newTokens, bctx)
+			if err != nil {
+				return err
+			}
 
-// 	if err := c.Repo.WithTx(func(tx *ent.Tx) error {
-// 		DB := tx.Client()
+			if spendCredits == 0 {
+				return nil
+			}
 
-// 		avTokens, err := c.Repo.GetChatTokens(user.ID, DB, r.Context())
-// 		if err != nil {
-// 			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
-// 			return err
-// 		}
+			// Deduct credits from user
+			deducted, err := c.Repo.DeductCreditsFromUser(userUUID, int32(spendCredits), DB)
+			if err != nil {
+				log.Error("Error deducting credits", "err", err)
+				return err
+			} else if !deducted {
+				// responses.ErrInsufficientCredits(w, r)
+				err := c.Repo.UpdateChatTokens(userUUID, DB, 0, bctx)
+				return err
+			}
 
-// 		newTokens := 0
-// 		spendCredits := 0
-// 		if avTokens < respTokens {
-// 			tmpTokens := respTokens - avTokens
-// 			if tmpTokens > 1000 {
-// 				spendCredits = tmpTokens / 1000
-// 				newTokens = tmpTokens % 1000
-// 			} else {
-// 				newTokens = 1000 - tmpTokens
-// 				spendCredits = 1
-// 			}
+			return nil
+		}); err != nil {
+			log.Error("Error in transaction", "err", err)
 
-// 		} else {
-// 			newTokens = avTokens - respTokens
-// 		}
+			resp.StatusCode = http.StatusBadRequest
+		}
+	}()
 
-// 		err = c.Repo.UpdateChatTokens(user.ID, DB, newTokens, r.Context())
-// 		if err != nil {
-// 			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
-// 			return err
-// 		}
-
-// 		if spendCredits == 0 {
-// 			return nil
-// 		}
-
-// 		// Deduct credits from user
-// 		deducted, err := c.Repo.DeductCreditsFromUser(user.ID, int32(spendCredits), DB)
-// 		if err != nil {
-// 			log.Error("Error deducting credits", "err", err)
-// 			responses.ErrInternalServerError(w, r, "Error deducting credits from user")
-// 			return err
-// 		} else if !deducted {
-// 			// responses.ErrInsufficientCredits(w, r)
-// 			c.Repo.UpdateChatTokens(user.ID, DB, 0, r.Context())
-// 		}
-
-// 		return nil
-// 	}); err != nil {
-// 		log.Error("Error in transaction", "err", err)
-// 		return
-// 	}
-// }
+	resp.Header.Del("access-control-allow-origin")
+	return nil
+}
 
 // HTTP Get - credits for user
 func (c *RestAPI) HandleQueryCredits(w http.ResponseWriter, r *http.Request) {

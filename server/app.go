@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -298,69 +296,8 @@ func main() {
 		log.Fatal("invalid origin server URL")
 	}
 
-	handler := func(p *httputil.ReverseProxy) func(http.ResponseWriter, *http.Request) {
-		return func(w http.ResponseWriter, r *http.Request) {
-			// set req Host, URL and Request URI to forward a request to the origin server
-			r.Host = originServerURL.Host
-			r.URL.Host = originServerURL.Host
-			r.URL.Scheme = originServerURL.Scheme
-			r.URL.Path = "/v1/chat/completions"
-			r.Header = http.Header{}
-			r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_KEY")))
-			r.Header.Set("content-type", "application/json")
-			r.Header.Set("Accept", "application/json")
-			r.Header.Set("origin", "https://synthica.ai")
-			r.RequestURI = ""
-
-			// Rewrite body
-			var askBody AskBody
-			err = json.NewDecoder(r.Body).Decode(&askBody)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-
-			askBody.Model = askBody.Settings.Model
-			askBody.MaxTokens = askBody.Settings.MaxTokens
-			askBody.Temperature = askBody.Settings.Temperature
-			askBody.TopP = askBody.Settings.TopP
-			askBody.Stream = true
-
-			newBody, _ := json.Marshal(askBody.AskBodyOpenAI)
-			newBodyStr := string(newBody)
-
-			r.Body = ioutil.NopCloser(strings.NewReader(newBodyStr))
-			r.ContentLength = int64(len(newBodyStr))
-
-			p.ServeHTTP(w, r)
-		}
-	}
-
-	rewriteBody := func(resp *http.Response) (err error) {
-		// b, err := ioutil.ReadAll(resp.Body) //Read html
-		// if err != nil {
-		// 	return err
-		// }
-
-		// err = resp.Body.Close()
-		// if err != nil {
-		// 	return err
-		// }
-
-		// respTokens := bytes.Count(b, []byte{'\n'})
-
-		// fmt.Println(respTokens)
-
-		// body := ioutil.NopCloser(bytes.NewReader(b))
-		// resp.Body = body
-		// resp.ContentLength = int64(len(b))
-		// resp.Header.Set("Content-Length", strconv.Itoa(len(b)))
-		resp.Header.Del("access-control-allow-origin")
-		return nil
-	}
-
 	proxy := httputil.NewSingleHostReverseProxy(originServerURL)
-	proxy.ModifyResponse = rewriteBody
+	proxy.ModifyResponse = hc.HandleAiChatAskResponse
 
 	// Routes that require authentication
 	app.Route("/ai-chat", func(r chi.Router) {
@@ -370,7 +307,7 @@ func main() {
 		r.Use(mw.RateLimit(10, "srv", 1*time.Second))
 
 		// Query credits
-		r.Post("/api/ask", handler(proxy))
+		r.Post("/api/ask", hc.HandleAiChatAsk(proxy))
 
 		r.Post("/api/suggest-title", hc.HandleAiChatTitle)
 	})
