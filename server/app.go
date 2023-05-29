@@ -309,6 +309,7 @@ func main() {
 			r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_KEY")))
 			r.Header.Set("content-type", "application/json")
 			r.Header.Set("Accept", "application/json")
+			r.Header.Set("origin", "https://synthica.ai")
 			r.RequestURI = ""
 
 			// Rewrite body
@@ -335,7 +336,30 @@ func main() {
 		}
 	}
 
+	// rewriteBody := func(resp *http.Response) (err error) {
+	// 	b, err := ioutil.ReadAll(resp.Body) //Read html
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// 	err = resp.Body.Close()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// 	respTokens := bytes.Count(b, []byte{'\n'})
+
+	// 	fmt.Println(respTokens)
+
+	// 	body := ioutil.NopCloser(bytes.NewReader(b))
+	// 	resp.Body = body
+	// 	resp.ContentLength = int64(len(b))
+	// 	resp.Header.Set("Content-Length", strconv.Itoa(len(b)))
+	// 	return nil
+	// }
+
 	proxy := httputil.NewSingleHostReverseProxy(originServerURL)
+	// proxy.ModifyResponse = rewriteBody
 
 	// Routes that require authentication
 	app.Route("/ai-chat", func(r chi.Router) {
