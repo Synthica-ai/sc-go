@@ -23,7 +23,6 @@ import (
 	chiprometheus "github.com/stablecog/chi-prometheus"
 	"github.com/stablecog/sc-go/cron/jobs"
 	"github.com/stablecog/sc-go/database"
-	"github.com/stablecog/sc-go/database/qdrant"
 	"github.com/stablecog/sc-go/database/repository"
 	"github.com/stablecog/sc-go/log"
 	"github.com/stablecog/sc-go/server/analytics"
@@ -120,22 +119,22 @@ func main() {
 	}
 
 	// Setup qdrant
-	qdrantClient, err := qdrant.NewQdrantClient(ctx)
-	if err != nil {
-		log.Fatal("Error connecting to qdrant", "err", err)
-		os.Exit(1)
-	}
-	err = qdrantClient.CreateCollectionIfNotExists(false)
-	if err != nil {
-		log.Fatal("Error creating qdrant collection", "err", err)
-		os.Exit(1)
-	}
+	// qdrantClient, err := qdrant.NewQdrantClient(ctx)
+	// if err != nil {
+	// 	log.Fatal("Error connecting to qdrant", "err", err)
+	// 	os.Exit(1)
+	// }
+	// err = qdrantClient.CreateCollectionIfNotExists(false)
+	// if err != nil {
+	// 	log.Fatal("Error creating qdrant collection", "err", err)
+	// 	os.Exit(1)
+	// }
 
-	// Create indexes in Qdrant
-	err = qdrantClient.CreateAllIndexes()
-	if err != nil {
-		log.Warn("Error creating qdrant indexes", "err", err)
-	}
+	// // Create indexes in Qdrant
+	// err = qdrantClient.CreateAllIndexes()
+	// if err != nil {
+	// 	log.Warn("Error creating qdrant indexes", "err", err)
+	// }
 
 	// Q Throttler
 	qThrottler := shared.NewQueueThrottler(ctx, redis.Client, shared.REQUEST_COG_TIMEOUT)
@@ -146,7 +145,7 @@ func main() {
 		ConnInfo:       dbconn,
 		Redis:          redis,
 		Ctx:            ctx,
-		Qdrant:         qdrantClient,
+		Qdrant:         nil,
 		QueueThrottler: qThrottler,
 	}
 
@@ -254,7 +253,7 @@ func main() {
 		Track:          analyticsService,
 		QueueThrottler: qThrottler,
 		S3:             s3Client,
-		Qdrant:         qdrantClient,
+		Qdrant:         nil,
 		Meili:          database.NewMeiliSearchClient(),
 		Clip:           clip.NewClipService(redis),
 		SMap:           apiTokenSmap,
