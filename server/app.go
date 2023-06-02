@@ -389,6 +389,10 @@ func main() {
 			r.Get("/tokens", hc.HandleGetAPITokens)
 			r.Delete("/tokens", hc.HandleDeactivateAPIToken)
 
+			// settings
+			r.Patch("/settings", hc.HandleUpdateUserSettings)
+			r.Get("/settings", hc.HandleGetUserSettings)
+
 			// Operations
 			r.Get("/operations", hc.HandleQueryOperations)
 		})

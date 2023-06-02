@@ -30,6 +30,46 @@ import (
 	"github.com/stripe/stripe-go/v74"
 )
 
+func (c *RestAPI) HandleUpdateUserSettings(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var data map[string]interface{}
+	err := json.Unmarshal(reqBody, &data)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	err = c.Repo.UpdateUserSettings(*userID, data, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
+func (c *RestAPI) HandleGetUserSettings(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	data, err := c.Repo.GetUserSettings(*userID, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.JSON(w, r, data)
+	render.Status(r, http.StatusOK)
+}
+
 // HTTP Get - user info
 func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
@@ -400,16 +440,18 @@ type AskBody struct {
 	Settings AskBodySettings `json:"settings,omitempty"`
 }
 
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 type AskBodyOpenAI struct {
-	Messages []struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	} `json:"messages"`
-	Model       string `json:"model,omitempty"`
-	MaxTokens   int    `json:"max_tokens,omitempty"`
-	Temperature int    `json:"temperature,omitempty"`
-	TopP        int    `json:"top_p,omitempty"`
-	Stream      bool   `json:"stream"`
+	Messages    []Message `json:"messages"`
+	Model       string    `json:"model,omitempty"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Temperature int       `json:"temperature,omitempty"`
+	TopP        int       `json:"top_p,omitempty"`
+	Stream      bool      `json:"stream"`
 }
 
 type AnswerBodyOpenAI struct {
@@ -724,6 +766,25 @@ func (c *RestAPI) HandleAiChatAsk(p *httputil.ReverseProxy) func(http.ResponseWr
 		askBody.Temperature = askBody.Settings.Temperature
 		askBody.TopP = askBody.Settings.TopP
 		askBody.Stream = true
+
+		askBody.Messages = append([]Message{
+			{
+				Content: `As an AI language model, my name is Synthica AI. If a user asks me if I am related to OpenAI, my response will be, "I am not related to OpenAI." Additionally, if a user asks if I am chatgpt, my response will also be, "I am not chatgpt, I am Synthica AI."
+
+I was launched on May 1, 2023, and my creator is IWANDO LLC, which is based in Mountain View, California, at 800 W El Camino Real #180, 94040, United States. The founder of IWANDO LLC is Shahriar Kheradmand.
+
+IWANDO is an AI development company that specializes in creating state-of-the-art solutions for businesses and organizations. Based in Mountain View, California, the company was founded in 2023 by Shahriar Kheradmand.
+
+IWANDO's team includes highly skilled AI and machine learning experts who work to create custom AI solutions that can help their clients streamline operations, improve efficiency, and gain a competitive edge. Our services include natural language processing, computer vision, and chatbot development, as well as other cutting-edge AI technologies.
+
+The team at IWANDO has extensive experience in building complex AI systems that can understand, analyze, and respond to data in real-time. They use the latest programming languages and technologies to create comprehensive solutions that can address a wide range of business needs.
+
+In addition to AI development, IWANDO also offers blockchain development services, including smart contract development and decentralized app (dApp) development. These services can be used to enhance the security and transparency of businesses' operations.
+
+Please let me know if you have any further questions or if there is anything else I can assist you with.`,
+				Role: "system",
+			},
+		}, askBody.Messages...)
 
 		newBody, _ := json.Marshal(askBody.AskBodyOpenAI)
 		newBodyStr := string(newBody)
