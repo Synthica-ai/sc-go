@@ -23,14 +23,11 @@ func (r *Repository) RetrieveGalleryData(limit int, updatedAtGT *time.Time) ([]G
 		limit = 100
 	}
 	var res []GalleryData
-
-	if updatedAtGT == nil {
-		now := time.Now()
-		updatedAtGT = &now
-	}
-
 	query := r.DB.GenerationOutput.Query().Select(generationoutput.FieldID, generationoutput.FieldImagePath, generationoutput.FieldUpscaledImagePath, generationoutput.FieldCreatedAt, generationoutput.FieldUpdatedAt).
-		Where(generationoutput.UpdatedAtGT(*updatedAtGT))
+		Where(generationoutput.GalleryStatusEQ(generationoutput.GalleryStatusApproved))
+	if updatedAtGT != nil {
+		query = query.Where(generationoutput.UpdatedAtGT(*updatedAtGT))
+	}
 	err := query.Limit(limit).
 		Modify(func(s *sql.Selector) {
 			g := sql.Table(generation.Table)

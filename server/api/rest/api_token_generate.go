@@ -88,6 +88,40 @@ func (c *RestAPI) HandleCreateGenerationToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	settings, err := c.Repo.GetUserSettings(user.ID, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	generateReq.SubmitToGallery = settings.PublicMode
+
+	if generateReq.GuidanceScale == 0 {
+		generateReq.GuidanceScale = float32(settings.GuidanceScale)
+	}
+
+	if generateReq.ModelId.String() == "00000000-0000-0000-0000-000000000000" {
+		modelID, _ := uuid.Parse(settings.ModelID)
+		generateReq.ModelId = modelID
+	}
+
+	if generateReq.SchedulerId.String() == "00000000-0000-0000-0000-000000000000" {
+		schedulerId, _ := uuid.Parse(settings.SchedulerID)
+		generateReq.SchedulerId = schedulerId
+	}
+
+	if generateReq.InferenceSteps == 0 {
+		generateReq.InferenceSteps = int32(settings.InferenceSteps)
+	}
+
+	if generateReq.Width == 0 {
+		generateReq.Width = 608
+	}
+
+	if generateReq.Height == 0 {
+		generateReq.Height = 912
+	}
+
 	// Validation
 	err = generateReq.Validate(true)
 	if err != nil {
