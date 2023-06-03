@@ -298,6 +298,23 @@ func main() {
 	proxy := httputil.NewSingleHostReverseProxy(originServerURL)
 	proxy.ModifyResponse = hc.HandleAiChatAskResponse
 
+	app.Route("/v2", func(r chi.Router) {
+		r.Use(mw.AuthMiddleware(middleware.AuthLevelAPIToken))
+		r.Use(middleware.Logger)
+		r.Use(mw.RateLimit(5, "api", 1*time.Second))
+
+		// Query credits
+		r.Post("/ai-chat/api/ask", hc.HandleAiChatAsk(proxy))
+
+		r.Post("/ai-chat/api/suggest-title", hc.HandleAiChatTitle)
+
+		r.Patch("/user/settings", hc.HandleUpdateUserSettings)
+		r.Get("/user/settings", hc.HandleGetUserSettings)
+
+		// Create Generation
+		r.Post("/user/generation", hc.HandleCreateGeneration)
+	})
+
 	// Routes that require authentication
 	app.Route("/ai-chat", func(r chi.Router) {
 		r.Use(mw.AuthMiddleware(middleware.AuthLevelAny))
