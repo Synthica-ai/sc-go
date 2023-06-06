@@ -31,8 +31,9 @@ import (
 )
 
 func (c *RestAPI) HandleUpdateUserSettings(w http.ResponseWriter, r *http.Request) {
-	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
-	if userID == nil || email == "" {
+	var user *ent.User
+	if user = c.GetUserIfAuthenticated(w, r); user == nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
 	}
 
@@ -45,7 +46,16 @@ func (c *RestAPI) HandleUpdateUserSettings(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = c.Repo.UpdateUserSettings(*userID, data, r.Context())
+	if user.ActiveProductID == nil || *user.ActiveProductID == GetProductIDs()[1] {
+		if val, ok := data["public_mode"]; ok {
+			if publicMode, ok := val.(bool); ok && !publicMode {
+				responses.ErrPrivateMode(w, r)
+				return
+			}
+		}
+	}
+
+	err = c.Repo.UpdateUserSettings(user.ID, data, r.Context())
 	if err != nil {
 		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return
@@ -148,6 +158,45 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		// go func() {
+		// 	// Live page update
+		// 	livePageMsg := cogMessage.Input.LivePageData
+		// 	if cogMessage.Status == requests.CogProcessing {
+		// 		livePageMsg.Status = shared.LivePageProcessing
+		// 	} else if cogMessage.Status == requests.CogSucceeded && len(cogMessage.Output.Images) > 0 {
+		// 		livePageMsg.Status = shared.LivePageSucceeded
+		// 	} else if cogMessage.Status == requests.CogSucceeded && cogMessage.NSFWCount > 0 {
+		// 		livePageMsg.Status = shared.LivePageFailed
+		// 		livePageMsg.FailureReason = shared.NSFW_ERROR
+		// 	} else {
+		// 		livePageMsg.Status = shared.LivePageFailed
+		// 	}
+
+		// 	now := time.Now()
+		// 	if cogMessage.Status == requests.CogProcessing {
+		// 		livePageMsg.StartedAt = &now
+		// 	}
+		// 	if cogMessage.Status == requests.CogSucceeded || cogMessage.Status == requests.CogFailed {
+		// 		livePageMsg.CompletedAt = &now
+		// 		livePageMsg.ActualNumOutputs = len(cogMessage.Output.Images)
+		// 		livePageMsg.NSFWCount = cogMessage.NSFWCount
+		// 	}
+		// 	// Send live page update
+		// 	liveResp := repository.TaskStatusUpdateResponse{
+		// 		ForLivePage:     true,
+		// 		LivePageMessage: livePageMsg,
+		// 	}
+		// 	respBytes, err := json.Marshal(liveResp)
+		// 	if err != nil {
+		// 		log.Error("Error marshalling sse live response", "err", err)
+		// 		return
+		// 	}
+		// 	err = c.Redis.Client.Publish(c.Redis.Ctx, shared.REDIS_SSE_BROADCAST_CHANNEL, respBytes).Err()
+		// 	if err != nil {
+		// 		log.Error("Failed to publish live page update", "err", err)
+		// 	}
+		// }()
+
 		go c.Track.SignUp(*userID, email, utils.GetIPAddress(r), utils.GetClientDeviceInfo(r))
 	}
 

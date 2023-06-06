@@ -36,11 +36,11 @@ func GetPriceIDs() map[int]string {
 func GetProductIDs() map[int]string {
 	return map[int]string{
 		// ultimate
-		3: utils.GetEnv("STRIPE_ULTIMATE_PRODUCT_ID", "prod_NTzE0C8bEuIv6F"),
+		3: utils.GetEnv("STRIPE_ULTIMATE_PRODUCT_ID", "prod_NbCctEv1JVfDZj"),
 		// pro
-		2: utils.GetEnv("STRIPE_PRO_PRODUCT_ID", "prod_NTzCojAHPw6tbX"),
+		2: utils.GetEnv("STRIPE_PRO_PRODUCT_ID", "prod_NbCbnOM1V7IIcN"),
 		// starter
-		1: utils.GetEnv("STRIPE_STARTER_PRODUCT_ID", "prod_NPuwbni7ZNkHDO"),
+		1: utils.GetEnv("STRIPE_STARTER_PRODUCT_ID", "prod_NbCWvc3zX6VbSt"),
 	}
 
 }

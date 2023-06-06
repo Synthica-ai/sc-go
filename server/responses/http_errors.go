@@ -16,6 +16,15 @@ var UnableToParseJsonError = ErrorResponse{
 	Error: "json_parse_error",
 }
 
+var PrivateModeError = ErrorResponse{
+	Error: "Your current membership plan doesn't include Private mode! Upgrade your plan at https://synthica.ai/account to gain access to Private mode.",
+}
+
+func ErrPrivateMode(w http.ResponseWriter, r *http.Request) {
+	render.Status(r, http.StatusBadRequest)
+	render.JSON(w, r, &PrivateModeError)
+}
+
 func ErrUnableToParseJson(w http.ResponseWriter, r *http.Request) {
 	render.Status(r, http.StatusBadRequest)
 	render.JSON(w, r, &UnableToParseJsonError)

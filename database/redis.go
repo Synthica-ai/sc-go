@@ -86,6 +86,8 @@ func (r *RedisWrapper) GetGenerateUpscaleCount() (stats *RedisStats, err error) 
 type RedisStats struct {
 	GenerationOutputCount int `json:"generation_output_count"`
 	UpscaleOutputCount    int `json:"upscale_output_count"`
+	UsersCount            int `json:"users_total"`
+	Users24H              int `json:"users_24h"`
 }
 
 // Enqueues a request to sc-worker

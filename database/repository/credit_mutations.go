@@ -215,6 +215,25 @@ func (r *Repository) GetChatTokens(userID uuid.UUID, DB *ent.Client, ctx context
 	return
 }
 
+func (r *Repository) GetUsersCount(DB *ent.Client, ctx context.Context) (users int, users24H int, err error) {
+	if DB == nil {
+		DB = r.DB
+	}
+	rows, err := DB.QueryContext(ctx, "select count(id), (select count(id) from users where created_at > now() - INTERVAL '24 Hour') FROM users;")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	for rows.Next() {
+		err := rows.Scan(&users, &users24H)
+		if err != nil {
+			return 0, 0, err
+		}
+	}
+
+	return
+}
+
 func (r *Repository) UpdateChatTokens(userID uuid.UUID, DB *ent.Client, amount int, ctx context.Context) error {
 	if DB == nil {
 		DB = r.DB
