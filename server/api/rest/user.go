@@ -158,44 +158,26 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		// go func() {
-		// 	// Live page update
-		// 	livePageMsg := cogMessage.Input.LivePageData
-		// 	if cogMessage.Status == requests.CogProcessing {
-		// 		livePageMsg.Status = shared.LivePageProcessing
-		// 	} else if cogMessage.Status == requests.CogSucceeded && len(cogMessage.Output.Images) > 0 {
-		// 		livePageMsg.Status = shared.LivePageSucceeded
-		// 	} else if cogMessage.Status == requests.CogSucceeded && cogMessage.NSFWCount > 0 {
-		// 		livePageMsg.Status = shared.LivePageFailed
-		// 		livePageMsg.FailureReason = shared.NSFW_ERROR
-		// 	} else {
-		// 		livePageMsg.Status = shared.LivePageFailed
-		// 	}
 
-		// 	now := time.Now()
-		// 	if cogMessage.Status == requests.CogProcessing {
-		// 		livePageMsg.StartedAt = &now
-		// 	}
-		// 	if cogMessage.Status == requests.CogSucceeded || cogMessage.Status == requests.CogFailed {
-		// 		livePageMsg.CompletedAt = &now
-		// 		livePageMsg.ActualNumOutputs = len(cogMessage.Output.Images)
-		// 		livePageMsg.NSFWCount = cogMessage.NSFWCount
-		// 	}
-		// 	// Send live page update
-		// 	liveResp := repository.TaskStatusUpdateResponse{
-		// 		ForLivePage:     true,
-		// 		LivePageMessage: livePageMsg,
-		// 	}
-		// 	respBytes, err := json.Marshal(liveResp)
-		// 	if err != nil {
-		// 		log.Error("Error marshalling sse live response", "err", err)
-		// 		return
-		// 	}
-		// 	err = c.Redis.Client.Publish(c.Redis.Ctx, shared.REDIS_SSE_BROADCAST_CHANNEL, respBytes).Err()
-		// 	if err != nil {
-		// 		log.Error("Failed to publish live page update", "err", err)
-		// 	}
-		// }()
+		go func() {
+			// Send live page update
+			liveResp := repository.TaskStatusUpdateResponse{
+				ForLivePage: true,
+				LivePageMessage: &shared.LivePageMessage{
+					ProcessType: "new_user",
+					ID:          userID.String(),
+				},
+			}
+			respBytes, err := json.Marshal(liveResp)
+			if err != nil {
+				log.Error("Error marshalling sse live response", "err", err)
+				return
+			}
+			err = c.Redis.Client.Publish(c.Redis.Ctx, shared.REDIS_SSE_BROADCAST_CHANNEL, respBytes).Err()
+			if err != nil {
+				log.Error("Failed to publish live page update", "err", err)
+			}
+		}()
 
 		go c.Track.SignUp(*userID, email, utils.GetIPAddress(r), utils.GetClientDeviceInfo(r))
 	}
