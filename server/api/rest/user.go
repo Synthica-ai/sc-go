@@ -30,6 +30,45 @@ import (
 	"github.com/stripe/stripe-go/v74"
 )
 
+type UserParams struct {
+	Role     string `json:"role"`
+	Username string `json:"username"`
+}
+
+func (c *RestAPI) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	var user *ent.User
+	if user = c.GetUserIfAuthenticated(w, r); user == nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var payload map[string]string
+	err := json.Unmarshal(reqBody, &payload)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	data := make(map[string]interface{})
+	if role, ok := payload["role"]; ok {
+		data["role"] = role
+	}
+	if username, ok := payload["username"]; ok {
+		data["username"] = username
+	}
+	data["complete_profile"] = true
+
+	err = c.Repo.UpdateUser(user.ID, data, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
 func (c *RestAPI) HandleUpdateUserSettings(w http.ResponseWriter, r *http.Request) {
 	var user *ent.User
 	if user = c.GetUserIfAuthenticated(w, r); user == nil {
@@ -298,6 +337,9 @@ func (c *RestAPI) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 		StripeHadError:        stripeHadError,
 		Roles:                 user.Roles,
 		MoreCreditsAt:         moreCreditsAt,
+		Role:                  user.Role,
+		Username:              user.Username,
+		CompleteProfile:       user.CompleteProfile,
 	})
 }
 

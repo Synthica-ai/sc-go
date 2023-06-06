@@ -58,6 +58,18 @@ func (r *Repository) UpdateUserSettings(id uuid.UUID, data map[string]interface{
 	return err
 }
 
+// Update last_seen_at
+func (r *Repository) UpdateUser(id uuid.UUID, data map[string]interface{}, ctx context.Context) error {
+	sqlBuilder := PsqlBuilder.Update("users").Where(sq.Eq{"id": id})
+
+	_, sqlBuilder = SetJsonbMapAndReturnColumns(sqlBuilder, data)
+
+	query, args, _ := sqlBuilder.ToSql()
+
+	_, err := r.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
 type UserSettings struct {
 	AspectRatio     string `json:"aspect_ratio"`
 	InitialImageURL string `json:"initial_image_url"`

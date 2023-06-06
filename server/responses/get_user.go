@@ -18,4 +18,7 @@ type GetUserResponse struct {
 	FreeCreditAmount *int                `json:"free_credit_amount,omitempty"`
 	StripeHadError   bool                `json:"stripe_had_error"`
 	Roles            []userrole.RoleName `json:"roles,omitempty"`
+	Role             string              `json:"role"`
+	Username         string              `json:"username"`
+	CompleteProfile  bool                `json:"complete_profile"`
 }

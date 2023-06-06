@@ -376,6 +376,8 @@ func main() {
 			// Get user summary
 			r.Get("/", hc.HandleGetUser)
 
+			r.Patch("/", hc.HandleUpdateUser)
+
 			// Create Generation
 			r.Post("/generation", hc.HandleCreateGeneration)
 			// Mark generation for deletion
