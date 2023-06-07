@@ -11,7 +11,7 @@ import (
 	"github.com/stablecog/sc-go/utils"
 )
 
-func (r *Repository) NewAPIToken(userId uuid.UUID, name string) (dbToken *ent.ApiToken, token string, err error) {
+func (r *Repository) NewAPIToken(userId uuid.UUID, name string, public bool) (dbToken *ent.ApiToken, token string, err error) {
 	// Create a new random 64 character token
 	token, err = utils.GenerateRandomHex(nil, 32)
 	if err != nil {
@@ -29,7 +29,7 @@ func (r *Repository) NewAPIToken(userId uuid.UUID, name string) (dbToken *ent.Ap
 	tokenShortString := fmt.Sprintf("%s...%s", token[0:3], token[len(token)-4:])
 
 	// Create in DB
-	dbToken, err = r.DB.ApiToken.Create().SetHashedToken(utils.Sha256(token)).SetUserID(userId).SetName(name).SetShortString(tokenShortString).SetIsActive(true).SetUses(0).Save(r.Ctx)
+	dbToken, err = r.DB.ApiToken.Create().SetHashedToken(utils.Sha256(token)).SetUserID(userId).SetName(name).SetPublic(public).SetShortString(tokenShortString).SetIsActive(true).SetUses(0).Save(r.Ctx)
 	if err != nil {
 		return nil, "", err
 	}

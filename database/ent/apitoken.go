@@ -41,6 +41,8 @@ type ApiToken struct {
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ApiTokenQuery when eager-loading is set.
 	Edges ApiTokenEdges `json:"edges"`
+
+	Public bool `json:"public"`
 }
 
 // ApiTokenEdges holds the relations/edges for other nodes in the graph.
@@ -94,6 +96,8 @@ func (*ApiToken) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case apitoken.FieldIsActive:
 			values[i] = new(sql.NullBool)
+		case apitoken.FieldPublic:
+			values[i] = new(sql.NullBool)
 		case apitoken.FieldUses, apitoken.FieldCreditsSpent:
 			values[i] = new(sql.NullInt64)
 		case apitoken.FieldHashedToken, apitoken.FieldName, apitoken.FieldShortString:
@@ -140,6 +144,12 @@ func (at *ApiToken) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field short_string", values[i])
 			} else if value.Valid {
 				at.ShortString = value.String
+			}
+		case apitoken.FieldPublic:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field public", values[i])
+			} else if value.Valid {
+				at.Public = value.Bool
 			}
 		case apitoken.FieldIsActive:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -244,6 +254,9 @@ func (at *ApiToken) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("credits_spent=")
 	builder.WriteString(fmt.Sprintf("%v", at.CreditsSpent))
+	builder.WriteString(", ")
+	builder.WriteString("public=")
+	builder.WriteString(fmt.Sprintf("%v", at.Public))
 	builder.WriteString(", ")
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", at.UserID))

@@ -36,6 +36,12 @@ func (atc *ApiTokenCreate) SetName(s string) *ApiTokenCreate {
 	return atc
 }
 
+// SetName sets the "name" field.
+func (atc *ApiTokenCreate) SetPublic(s bool) *ApiTokenCreate {
+	atc.mutation.SetPublic(s)
+	return atc
+}
+
 // SetShortString sets the "short_string" field.
 func (atc *ApiTokenCreate) SetShortString(s string) *ApiTokenCreate {
 	atc.mutation.SetShortString(s)
@@ -253,6 +259,9 @@ func (atc *ApiTokenCreate) check() error {
 	if _, ok := atc.mutation.ShortString(); !ok {
 		return &ValidationError{Name: "short_string", err: errors.New(`ent: missing required field "ApiToken.short_string"`)}
 	}
+	if _, ok := atc.mutation.Public(); !ok {
+		return &ValidationError{Name: "public", err: errors.New(`ent: missing required field "ApiToken.public"`)}
+	}
 	if _, ok := atc.mutation.IsActive(); !ok {
 		return &ValidationError{Name: "is_active", err: errors.New(`ent: missing required field "ApiToken.is_active"`)}
 	}
@@ -350,6 +359,10 @@ func (atc *ApiTokenCreate) createSpec() (*ApiToken, *sqlgraph.CreateSpec) {
 	if value, ok := atc.mutation.UpdatedAt(); ok {
 		_spec.SetField(apitoken.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if value, ok := atc.mutation.Public(); ok {
+		_spec.SetField(apitoken.FieldPublic, field.TypeBool, value)
+		_node.Public = value
 	}
 	if nodes := atc.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -69,6 +69,7 @@ func (m *Middleware) AuthMiddleware(level AuthLevel) func(next http.Handler) htt
 				email = user.Email
 				lastSignIn = user.LastSignInAt
 				ctx = context.WithValue(ctx, "api_token_id", token.ID.String())
+				ctx = context.WithValue(ctx, "public", token.Public)
 			} else {
 				// Check supabase to see if it's all good
 				authToken := r.Header.Get("Authorization")

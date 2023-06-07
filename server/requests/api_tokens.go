@@ -7,5 +7,6 @@ type DeactiveApiTokenRequest struct {
 }
 
 type NewTokenRequest struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Public bool   `json:"public"`
 }

@@ -21,6 +21,8 @@ const (
 	FieldShortString = "short_string"
 	// FieldIsActive holds the string denoting the is_active field in the database.
 	FieldIsActive = "is_active"
+	// FieldIsActive holds the string denoting the is_active field in the database.
+	FieldPublic = "public"
 	// FieldUses holds the string denoting the uses field in the database.
 	FieldUses = "uses"
 	// FieldCreditsSpent holds the string denoting the credits_spent field in the database.
@@ -77,6 +79,7 @@ var Columns = []string{
 	FieldLastUsedAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
+	FieldPublic,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

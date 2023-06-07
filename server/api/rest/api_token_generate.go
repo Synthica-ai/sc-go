@@ -94,7 +94,9 @@ func (c *RestAPI) HandleCreateGenerationToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	generateReq.SubmitToGallery = settings.PublicMode
+	publicMode, _ := r.Context().Value("public").(bool)
+
+	generateReq.SubmitToGallery = publicMode
 
 	if generateReq.GuidanceScale == 0 {
 		generateReq.GuidanceScale = float32(settings.GuidanceScale)

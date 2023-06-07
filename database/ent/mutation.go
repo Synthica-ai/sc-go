@@ -67,6 +67,7 @@ type ApiTokenMutation struct {
 	id                 *uuid.UUID
 	hashed_token       *string
 	name               *string
+	public             *bool
 	short_string       *string
 	is_active          *bool
 	uses               *int
@@ -235,6 +236,11 @@ func (m *ApiTokenMutation) SetName(s string) {
 	m.name = &s
 }
 
+// SetName sets the "name" field.
+func (m *ApiTokenMutation) SetPublic(s bool) {
+	m.public = &s
+}
+
 // Name returns the value of the "name" field in the mutation.
 func (m *ApiTokenMutation) Name() (r string, exists bool) {
 	v := m.name
@@ -274,6 +280,16 @@ func (m *ApiTokenMutation) SetShortString(s string) {
 // ShortString returns the value of the "short_string" field in the mutation.
 func (m *ApiTokenMutation) ShortString() (r string, exists bool) {
 	v := m.short_string
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+
+// ShortString returns the value of the "short_string" field in the mutation.
+func (m *ApiTokenMutation) Public() (r bool, exists bool) {
+	v := m.public
 	if v == nil {
 		return
 	}
@@ -784,6 +800,9 @@ func (m *ApiTokenMutation) Fields() []string {
 	}
 	if m.short_string != nil {
 		fields = append(fields, apitoken.FieldShortString)
+	}
+	if m.public != nil {
+		fields = append(fields, apitoken.FieldPublic)
 	}
 	if m.is_active != nil {
 		fields = append(fields, apitoken.FieldIsActive)

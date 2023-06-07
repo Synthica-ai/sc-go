@@ -21,6 +21,7 @@ type ApiToken struct {
 	IsActive     bool       `json:"is_active"`
 	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
+	Public       bool       `json:"public"`
 }
 
 type GetApiTokensResponse struct {
