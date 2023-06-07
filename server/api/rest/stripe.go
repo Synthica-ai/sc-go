@@ -433,6 +433,36 @@ func (c *RestAPI) HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 				go discord.SubscriptionUpgradeWebhook(c.Repo, user, oldProduct, newProduct)
 			}()
 		}
+	case "customer.subscription.updated":
+		sub, err := stripeObjectMapToCustomSubscriptionObject(event.Data.Object)
+		if err != nil || sub == nil {
+			log.Error("Unable parsing stripe subscription object", "err", err)
+			responses.ErrInternalServerError(w, r, err.Error())
+			return
+		}
+		user, err := c.Repo.GetUserByStripeCustomerId(sub.Customer)
+		if err != nil {
+			log.Error("Unable getting user from stripe customer id", "err", err)
+			responses.ErrInternalServerError(w, r, err.Error())
+			return
+		} else if user == nil {
+			log.Error("User does not exist with stripe customer id: %s", sub.Customer)
+			responses.ErrInternalServerError(w, r, "User does not exist with stripe customer id")
+			return
+		}
+
+		// Get product Id from subscription
+		if sub.Items != nil && len(sub.Items.Data) > 0 && sub.Items.Data[0].Price != nil {
+			go func() {
+				// Delay to avoid race with upgrades
+				time.Sleep(30 * time.Second)
+				err := c.Repo.SetActiveProductID(user.ID, sub.Items.Data[0].Price.Product, nil)
+				if err != nil {
+					log.Error("Unable unsetting stripe product id", "err", err)
+					return
+				}
+			}()
+		}
 	case "customer.subscription.deleted":
 		sub, err := stripeObjectMapToCustomSubscriptionObject(event.Data.Object)
 		if err != nil || sub == nil {
