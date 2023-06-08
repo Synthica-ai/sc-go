@@ -32,6 +32,7 @@ type CreateGenerationRequest struct {
 	SubmitToGallery      bool                  `json:"submit_to_gallery"`
 	ProcessType          shared.ProcessType    `json:"process_type"`
 	OutputImageExtension shared.ImageExtension `json:"output_image_extension"`
+	ImageURL             *string               `json:"image_url"`
 }
 
 func (t *CreateGenerationRequest) Validate(api bool) error {

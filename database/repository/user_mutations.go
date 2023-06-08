@@ -71,13 +71,20 @@ func (r *Repository) UpdateUser(id uuid.UUID, data map[string]interface{}, ctx c
 }
 
 type UserSettings struct {
-	AspectRatio     string `json:"aspect_ratio"`
-	InitialImageURL string `json:"initial_image_url"`
-	ModelID         string `json:"model_id"`
-	InferenceSteps  int    `json:"inference_steps"`
-	SchedulerID     string `json:"scheduler_id"`
-	GuidanceScale   int    `json:"guidance_scale"`
-	PublicMode      bool   `json:"public_mode"`
+	Width          int32    `json:"width"`
+	Height         int32    `json:"height"`
+	Seed           int      `json:"seed"`
+	PromptStrength *float32 `json:"prompt_strength"`
+	Prompt         *string  `json:"prompt"`
+	NegativePrompt *string  `json:"negative_prompt"`
+
+	AspectRatio     string  `json:"aspect_ratio"`
+	InitialImageURL *string `json:"initial_image_url"`
+	ModelID         string  `json:"model_id"`
+	InferenceSteps  int32   `json:"inference_steps"`
+	SchedulerID     string  `json:"scheduler_id"`
+	GuidanceScale   float32 `json:"guidance_scale"`
+	PublicMode      bool    `json:"public_mode"`
 }
 
 // Update last_seen_at
@@ -109,6 +116,55 @@ func (r *Repository) GetUserSettings(id uuid.UUID, ctx context.Context) (UserSet
 			&res.SchedulerID,
 			&res.GuidanceScale,
 			&res.PublicMode,
+		)
+		if err != nil {
+			return res, err
+		}
+	}
+
+	return res, nil
+}
+
+// Update last_seen_at
+func (r *Repository) GetImageSettings(imageUrl string, ctx context.Context) (UserSettings, error) {
+	var res UserSettings
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			width,
+			height,
+			inference_steps,
+			guidance_scale,
+			seed,
+			init_image_url,
+			prompt_strength,
+			model_id,
+			prn.text as negative_prompt,
+			pr.text as prompt,
+			scheduler_id   
+		from generation_outputs go
+		JOIN generations gen ON gen.id = go.generation_id
+		JOIN prompts pr ON pr.id = gen.prompt_id
+		LEFT JOIN negative_prompts prn ON prn.id = gen.negative_prompt_id
+		where go.image_path=$1;
+	`, imageUrl)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		err := rows.Scan(
+			&res.Width,
+			&res.Height,
+			&res.InferenceSteps,
+			&res.GuidanceScale,
+			&res.Seed,
+			&res.InitialImageURL,
+			&res.PromptStrength,
+			&res.ModelID,
+			&res.NegativePrompt,
+			&res.Prompt,
+			&res.SchedulerID,
 		)
 		if err != nil {
 			return res, err

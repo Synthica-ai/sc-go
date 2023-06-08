@@ -459,6 +459,14 @@ func main() {
 			r.Post("/", hc.HandleCreateGenerationToken)
 		})
 
+		// Api token route
+		r.Route("/generate_similar", func(r chi.Router) {
+			r.Use(mw.AuthMiddleware(middleware.AuthLevelAPIToken))
+			r.Use(middleware.Logger)
+			r.Use(mw.RateLimit(5, "api", 1*time.Second))
+			r.Post("/", hc.HandleCreateGenerationToken)
+		})
+
 		r.Route("/upscale", func(r chi.Router) {
 			r.Use(mw.AuthMiddleware(middleware.AuthLevelAPIToken))
 			r.Use(middleware.Logger)

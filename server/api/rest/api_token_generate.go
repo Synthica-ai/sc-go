@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -88,18 +90,49 @@ func (c *RestAPI) HandleCreateGenerationToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	settings, err := c.Repo.GetUserSettings(user.ID, r.Context())
-	if err != nil {
-		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
-		return
+	var settings repository.UserSettings
+	if generateReq.ImageURL != nil {
+		imageURLID := path.Base(*generateReq.ImageURL)
+		settings, err = c.Repo.GetImageSettings(imageURLID, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+			return
+		}
+
+		generateReq.Width = settings.Width
+		generateReq.Height = settings.Height
+		generateReq.Seed = rand.Intn(9999999999-1000000000) + 1000000000
+		if settings.InitialImageURL != nil {
+			generateReq.InitImageUrl = *settings.InitialImageURL
+		}
+		generateReq.PromptStrength = settings.PromptStrength
+		if settings.NegativePrompt != nil {
+			generateReq.NegativePrompt = *settings.NegativePrompt
+		}
+		if settings.Prompt != nil {
+			generateReq.Prompt = *settings.Prompt
+		}
+		generateReq.NumOutputs = 4
+	} else {
+		settings, err = c.Repo.GetUserSettings(user.ID, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+			return
+		}
+
+		switch settings.AspectRatio {
+		case "1:1":
+			generateReq.Width = 768
+			generateReq.Height = 768
+		default:
+			generateReq.Width = 608
+			generateReq.Height = 912
+
+		}
 	}
 
-	publicMode, _ := r.Context().Value("public").(bool)
-
-	generateReq.SubmitToGallery = publicMode
-
 	if generateReq.GuidanceScale == 0 {
-		generateReq.GuidanceScale = float32(settings.GuidanceScale)
+		generateReq.GuidanceScale = settings.GuidanceScale
 	}
 
 	if generateReq.ModelId.String() == "00000000-0000-0000-0000-000000000000" {
@@ -113,16 +146,12 @@ func (c *RestAPI) HandleCreateGenerationToken(w http.ResponseWriter, r *http.Req
 	}
 
 	if generateReq.InferenceSteps == 0 {
-		generateReq.InferenceSteps = int32(settings.InferenceSteps)
+		generateReq.InferenceSteps = settings.InferenceSteps
 	}
 
-	if generateReq.Width == 0 {
-		generateReq.Width = 608
-	}
+	publicMode, _ := r.Context().Value("public").(bool)
 
-	if generateReq.Height == 0 {
-		generateReq.Height = 912
-	}
+	generateReq.SubmitToGallery = publicMode
 
 	// Validation
 	err = generateReq.Validate(true)

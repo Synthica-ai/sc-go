@@ -83,15 +83,20 @@ func (c *RestAPI) HandleNewAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if newReq.Public == nil {
+		True := true
+		newReq.Public = &True
+	}
+
 	if user.ActiveProductID == nil || *user.ActiveProductID == GetProductIDs()[1] {
-		if !newReq.Public {
+		if !*newReq.Public {
 			responses.ErrPrivateMode(w, r)
 			return
 		}
 	}
 
 	// Create new token
-	token, tokenStr, err := c.Repo.NewAPIToken(user.ID, newReq.Name, newReq.Public)
+	token, tokenStr, err := c.Repo.NewAPIToken(user.ID, newReq.Name, *newReq.Public)
 	if err != nil {
 		log.Error("Error creating new token", "err", err)
 		responses.ErrInternalServerError(w, r, "An unknown error has occured")
