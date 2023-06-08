@@ -376,6 +376,30 @@ func (r *Repository) RetrieveGenerationsWithOutputIDs(outputIDs []uuid.UUID) (*G
 // If present, we will get results after the cursor (anything before, represents previous pages)
 // ! using ent .With... doesn't use joins, so we construct our own query to make it more efficient
 func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *requests.QueryGenerationFilters) (*GenerationQueryWithOutputsMeta[*time.Time], error) {
+	var genIndex []uuid.UUID
+
+	if cursor == nil {
+		now := time.Now()
+		cursor = &now
+	}
+
+	rows, err := r.DB.QueryContext(r.Ctx, `
+		select id from generations  where
+			user_id=$1 AND created_at < $2 and status='succeeded' order by created_at desc limit 50;
+	`, filters.UserID, cursor)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id uuid.UUID
+		err := rows.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+
+		genIndex = append(genIndex, id)
+	}
+
 	// Base fields to select in our query
 	selectFields := []string{
 		generation.FieldID,
@@ -400,18 +424,18 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 	var gQueryResult []GenerationQueryWithOutputsResult
 
 	// Figure out order bys
-	var orderByGeneration []string
-	var orderByOutput []string
-	if filters == nil || (filters != nil && filters.OrderBy == requests.OrderByCreatedAt) {
-		orderByGeneration = []string{generation.FieldCreatedAt}
-		orderByOutput = []string{generationoutput.FieldCreatedAt}
-	} else {
-		orderByGeneration = []string{generation.FieldCreatedAt, generation.FieldUpdatedAt}
-		orderByOutput = []string{generationoutput.FieldCreatedAt, generationoutput.FieldUpdatedAt}
-	}
+	// var orderByGeneration []string
+	// var orderByOutput []string
+	// if filters == nil || (filters != nil && filters.OrderBy == requests.OrderByCreatedAt) {
+	// 	orderByGeneration = []string{generation.FieldCreatedAt}
+	// 	orderByOutput = []string{generationoutput.FieldCreatedAt}
+	// } else {
+	// 	orderByGeneration = []string{generation.FieldCreatedAt, generation.FieldUpdatedAt}
+	// 	orderByOutput = []string{generationoutput.FieldCreatedAt, generationoutput.FieldUpdatedAt}
+	// }
 
 	query = r.DB.Generation.Query().Select(selectFields...).
-		Where(generation.StatusEQ(generation.StatusSucceeded))
+		Where(generation.IDIn(genIndex...))
 	if filters.UserID != nil {
 		query = query.Where(generation.UserID(*filters.UserID))
 	}
@@ -431,7 +455,7 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 	query = query.Limit(per_page + 1)
 
 	// Join other data
-	err := query.Modify(func(s *sql.Selector) {
+	err = query.Modify(func(s *sql.Selector) {
 		gt := sql.Table(generation.Table)
 		npt := sql.Table(negativeprompt.Table)
 		pt := sql.Table(prompt.Table)
@@ -446,29 +470,29 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 			GroupBy(s.C(generation.FieldID), npt.C(negativeprompt.FieldText), pt.C(prompt.FieldText),
 				got.C(generationoutput.FieldID), got.C(generationoutput.FieldGalleryStatus),
 				got.C(generationoutput.FieldImagePath), got.C(generationoutput.FieldUpscaledImagePath))
-		orderDir := "asc"
-		if filters == nil || (filters != nil && filters.Order == requests.SortOrderDescending) {
-			orderDir = "desc"
-		}
-		var orderByGeneration2 []string
-		var orderByOutput2 []string
-		for _, o := range orderByGeneration {
-			if orderDir == "desc" {
-				orderByGeneration2 = append(orderByGeneration2, sql.Desc(gt.C(o)))
-			} else {
-				orderByGeneration2 = append(orderByGeneration2, sql.Asc(gt.C(o)))
-			}
-		}
-		for _, o := range orderByOutput {
-			if orderDir == "desc" {
-				orderByOutput2 = append(orderByOutput2, sql.Desc(got.C(o)))
-			} else {
-				orderByOutput2 = append(orderByOutput2, sql.Asc(got.C(o)))
-			}
-		}
-		// Order by generation, then output
-		orderByCombined := append(orderByGeneration2, orderByOutput2...)
-		s.OrderBy(orderByCombined...)
+		// orderDir := "asc"
+		// if filters == nil || (filters != nil && filters.Order == requests.SortOrderDescending) {
+		// 	orderDir = "desc"
+		// }
+		// var orderByGeneration2 []string
+		// var orderByOutput2 []string
+		// for _, o := range orderByGeneration {
+		// 	if orderDir == "desc" {
+		// 		orderByGeneration2 = append(orderByGeneration2, sql.Desc(gt.C(o)))
+		// 	} else {
+		// 		orderByGeneration2 = append(orderByGeneration2, sql.Asc(gt.C(o)))
+		// 	}
+		// }
+		// for _, o := range orderByOutput {
+		// 	if orderDir == "desc" {
+		// 		orderByOutput2 = append(orderByOutput2, sql.Desc(got.C(o)))
+		// 	} else {
+		// 		orderByOutput2 = append(orderByOutput2, sql.Asc(got.C(o)))
+		// 	}
+		// }
+		// // Order by generation, then output
+		// orderByCombined := append(orderByGeneration2, orderByOutput2...)
+		s.OrderBy(sql.Desc(gt.C(generationoutput.FieldCreatedAt)))
 	}).Scan(r.Ctx, &gQueryResult)
 
 	if err != nil {
