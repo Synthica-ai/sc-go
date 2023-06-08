@@ -385,7 +385,7 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 
 	rows, err := r.DB.QueryContext(r.Ctx, `
 		select id from generations  where
-			user_id=$1 AND created_at < $2 and status='succeeded' order by created_at desc;
+			user_id=$1 AND created_at < $2 and status='succeeded' order by created_at desc limit 50;
 	`, filters.UserID, cursor)
 	if err != nil {
 		return nil, err
@@ -437,10 +437,7 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 	query = r.DB.Generation.Query().Select(selectFields...).
 		Where(generation.IDIn(genIndex...))
 	if filters.UserID != nil {
-		query = query.Where(generation.UserID(*filters.UserID))
-	}
-	if cursor != nil {
-		query = query.Where(generation.CreatedAtLT(*cursor))
+		query = query.Where(generation.IDIn(genIndex...))
 	}
 
 	// Exclude deleted at always
