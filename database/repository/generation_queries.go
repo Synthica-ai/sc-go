@@ -385,7 +385,7 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 
 	rows, err := r.DB.QueryContext(r.Ctx, `
 		select id from generations  where
-			user_id=$1 AND created_at < $2 and status='succeeded' order by created_at desc limit 50;
+			user_id=$1 AND created_at < $2 and status='succeeded' order by created_at desc limit 51;
 	`, filters.UserID, cursor)
 	if err != nil {
 		return nil, err
