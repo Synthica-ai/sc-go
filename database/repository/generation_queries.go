@@ -237,42 +237,25 @@ func (r *Repository) ApplyUserGenerationsFilters(query *ent.GenerationQuery, fil
 
 // Gets the count of generations with outputs user has with filters
 func (r *Repository) GetGenerationCount(filters *requests.QueryGenerationFilters) (int, error) {
-	var query *ent.GenerationQuery
+	var count int
 
-	query = r.DB.Generation.Query().
-		Where(generation.StatusEQ(generation.StatusSucceeded))
-	if filters.UserID != nil {
-		query = query.Where(generation.UserID(*filters.UserID))
-	}
-
-	// Exclude deleted at always
-	query = query.Where(func(s *sql.Selector) {
-		s.Where(sql.IsNull("deleted_at"))
-	})
-
-	// Apply filters
-	query = r.ApplyUserGenerationsFilters(query, filters, false)
-
-	// Join other data
-	var res []UserGenCount
-	err := query.Modify(func(s *sql.Selector) {
-		npt := sql.Table(negativeprompt.Table)
-		pt := sql.Table(prompt.Table)
-		got := sql.Table(generationoutput.Table)
-		s.LeftJoin(npt).On(
-			s.C(generation.FieldNegativePromptID), npt.C(negativeprompt.FieldID),
-		).LeftJoin(pt).On(
-			s.C(generation.FieldPromptID), pt.C(prompt.FieldID),
-		).LeftJoin(got).On(
-			s.C(generation.FieldID), got.C(generationoutput.FieldGenerationID),
-		).Select(sql.As(sql.Count("*"), "total"))
-	}).Scan(r.Ctx, &res)
+	rows, err := r.DB.QueryContext(r.Ctx, `
+		select count(*)
+			from generations
+		where user_id=$1 and status='succeeded';
+	`, filters.UserID)
 	if err != nil {
 		return 0, err
-	} else if len(res) == 0 {
-		return 0, nil
 	}
-	return res[0].Total, nil
+
+	for rows.Next() {
+		err := rows.Scan(&count)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return count, nil
 }
 
 type UserGenCount struct {
@@ -378,7 +361,9 @@ func (r *Repository) RetrieveGenerationsWithOutputIDs(outputIDs []uuid.UUID) (*G
 func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *requests.QueryGenerationFilters) (*GenerationQueryWithOutputsMeta[*time.Time], error) {
 	var genIndex []uuid.UUID
 
+	nilCursor := false
 	if cursor == nil {
+		nilCursor = true
 		now := time.Now()
 		cursor = &now
 	}
@@ -502,7 +487,7 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 			Outputs: []GenerationQueryWithOutputsResultFormatted{},
 		}
 		// Only give total if we have no cursor
-		if cursor == nil {
+		if nilCursor {
 			zero := 0
 			meta.Total = &zero
 		}
@@ -583,7 +568,7 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 		meta.Outputs[i].Generation.Outputs = generationOutputMap[g.Generation.ID]
 	}
 
-	if cursor == nil {
+	if nilCursor {
 		total, err := r.GetGenerationCount(filters)
 		if err != nil {
 			log.Error("Error getting user generation count", "err", err)
