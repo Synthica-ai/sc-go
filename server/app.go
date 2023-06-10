@@ -405,6 +405,7 @@ func main() {
 
 			// API Tokens
 			r.Post("/tokens", hc.HandleNewAPIToken)
+			r.Patch("/tokens", hc.HandleUpdateAPIToken)
 			r.Get("/tokens", hc.HandleGetAPITokens)
 			r.Delete("/tokens", hc.HandleDeactivateAPIToken)
 

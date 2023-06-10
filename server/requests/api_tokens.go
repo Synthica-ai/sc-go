@@ -10,3 +10,8 @@ type NewTokenRequest struct {
 	Name   string `json:"name"`
 	Public *bool  `json:"public"`
 }
+
+type UpdateTokenRequest struct {
+	ID     string `json:"id"`
+	Public *bool  `json:"public"`
+}

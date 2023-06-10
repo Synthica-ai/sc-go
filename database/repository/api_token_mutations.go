@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -34,6 +35,14 @@ func (r *Repository) NewAPIToken(userId uuid.UUID, name string, public bool) (db
 		return nil, "", err
 	}
 	return dbToken, token, nil
+}
+
+func (r *Repository) UpdateAPIToken(userId uuid.UUID, id string, public bool) error {
+	_, err := r.DB.ExecContext(context.Background(), `
+		UPDATE api_tokens SET public=$1 where user_id=$2 AND id=$3;
+	`, public, userId, id)
+
+	return err
 }
 
 func (r *Repository) SetTokenUsedAndIncrementCreditsSpent(creditsSpent int, tokenId uuid.UUID) error {

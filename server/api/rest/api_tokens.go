@@ -49,6 +49,44 @@ func (c *RestAPI) HandleGetAPITokens(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (c *RestAPI) HandleUpdateAPIToken(w http.ResponseWriter, r *http.Request) {
+	var user *ent.User
+	if user = c.GetUserIfAuthenticated(w, r); user == nil {
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var newReq requests.UpdateTokenRequest
+	err := json.Unmarshal(reqBody, &newReq)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	if newReq.Public == nil {
+		render.Status(r, http.StatusOK)
+		return
+	}
+
+	if user.ActiveProductID == nil || *user.ActiveProductID == GetProductIDs()[1] {
+		if !*newReq.Public {
+			responses.ErrPrivateMode(w, r)
+			return
+		}
+	}
+
+	// Create new token
+	err = c.Repo.UpdateAPIToken(user.ID, newReq.ID, *newReq.Public)
+	if err != nil {
+		log.Error("Error creating new token", "err", err)
+		responses.ErrInternalServerError(w, r, "An unknown error has occured")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
 // POST - Create a new API token for the user
 func (c *RestAPI) HandleNewAPIToken(w http.ResponseWriter, r *http.Request) {
 	var user *ent.User
