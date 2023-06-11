@@ -505,6 +505,7 @@ type AskBodySettings struct {
 	MaxTokens   int    `json:"max_tokens,omitempty"`
 	Temperature int    `json:"temperature,omitempty"`
 	TopP        int    `json:"top_p,omitempty"`
+	Stream      *bool  `json:"stream"`
 }
 
 type AskBody struct {
@@ -838,7 +839,12 @@ func (c *RestAPI) HandleAiChatAsk(p *httputil.ReverseProxy) func(http.ResponseWr
 		askBody.MaxTokens = askBody.Settings.MaxTokens
 		askBody.Temperature = askBody.Settings.Temperature
 		askBody.TopP = askBody.Settings.TopP
-		askBody.Stream = true
+
+		if askBody.Settings.Stream == nil {
+			askBody.Stream = true
+		} else {
+			askBody.Stream = *askBody.Settings.Stream
+		}
 
 		contextSetted := false
 		for _, messages := range askBody.Messages {

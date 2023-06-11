@@ -120,14 +120,31 @@ func (c *RestAPI) HandleCreateGenerationToken(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		switch settings.AspectRatio {
-		case "1:1":
-			generateReq.Width = 768
-			generateReq.Height = 768
-		default:
-			generateReq.Width = 608
-			generateReq.Height = 912
+		if generateReq.Width == 0 || generateReq.Height == 0 {
+			switch settings.AspectRatio {
+			case "1:1":
+				generateReq.Width = 768
+				generateReq.Height = 768
+			case "4:5":
+				generateReq.Width = 672
+				generateReq.Height = 840
+			case "2:3":
+				generateReq.Width = 608
+				generateReq.Height = 912
+			case "3:2":
+				generateReq.Width = 912
+				generateReq.Height = 608
+			case "9:16":
+				generateReq.Width = 576
+				generateReq.Height = 1024
+			case "16:9":
+				generateReq.Width = 1024
+				generateReq.Height = 576
+			default:
+				generateReq.Width = 608
+				generateReq.Height = 912
 
+			}
 		}
 	}
 
