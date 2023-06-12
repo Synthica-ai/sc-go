@@ -413,6 +413,9 @@ func main() {
 			r.Patch("/settings", hc.HandleUpdateUserSettings)
 			r.Get("/settings", hc.HandleGetUserSettings)
 
+			r.Patch("/account", hc.HandleUpdateAccount)
+			r.Get("/account", hc.HandleGetAccount)
+
 			// Operations
 			r.Get("/operations", hc.HandleQueryOperations)
 		})

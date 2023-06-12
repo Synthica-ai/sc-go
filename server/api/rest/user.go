@@ -35,6 +35,31 @@ type UserParams struct {
 	Username string `json:"username"`
 }
 
+func (c *RestAPI) HandleUpdateAccount(w http.ResponseWriter, r *http.Request) {
+	var user *ent.User
+	if user = c.GetUserIfAuthenticated(w, r); user == nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var payload map[string]interface{}
+	err := json.Unmarshal(reqBody, &payload)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	err = c.Repo.UpdateAccount(user.ID, payload, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
 func (c *RestAPI) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	var user *ent.User
 	if user = c.GetUserIfAuthenticated(w, r); user == nil {
@@ -110,6 +135,22 @@ func (c *RestAPI) HandleGetUserSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	data, err := c.Repo.GetUserSettings(*userID, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.JSON(w, r, data)
+	render.Status(r, http.StatusOK)
+}
+
+func (c *RestAPI) HandleGetAccount(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	data, err := c.Repo.GetAccount(*userID, r.Context())
 	if err != nil {
 		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
 		return

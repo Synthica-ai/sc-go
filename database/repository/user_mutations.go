@@ -70,6 +70,30 @@ func (r *Repository) UpdateUser(id uuid.UUID, data map[string]interface{}, ctx c
 	return err
 }
 
+func (r *Repository) UpdateAccount(userID uuid.UUID, data map[string]interface{}, ctx context.Context) error {
+	sqlBuilder := PsqlBuilder.Update("account_info").Where(sq.Eq{"user_id": userID})
+
+	_, sqlBuilder = SetJsonbMapAndReturnColumns(sqlBuilder, data)
+
+	query, args, _ := sqlBuilder.ToSql()
+
+	_, err := r.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+type Account struct {
+	Firstame           string `json:"first_name"`
+	Lastname           string `json:"last_name"`
+	WritingFor         string `json:"writing_for"`
+	Presentation       string `json:"presentation"`
+	Industry           string `json:"industry"`
+	Description        string `json:"description"`
+	CompanyName        string `json:"company_name"`
+	CompanyIndustry    string `json:"company_industry"`
+	CompanyDescription string `json:"сompany_description"`
+	WritingDNA         string `json:"writing_dna"`
+}
+
 type UserSettings struct {
 	Width          int32    `json:"width"`
 	Height         int32    `json:"height"`
@@ -116,6 +140,50 @@ func (r *Repository) GetUserSettings(id uuid.UUID, ctx context.Context) (UserSet
 			&res.SchedulerID,
 			&res.GuidanceScale,
 			&res.PublicMode,
+		)
+		if err != nil {
+			return res, err
+		}
+	}
+
+	return res, nil
+}
+
+// Update last_seen_at
+func (r *Repository) GetAccount(userID uuid.UUID, ctx context.Context) (Account, error) {
+	var res Account
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			first_name,
+			last_name,
+			writing_for,
+			presentation,
+			industry,
+			description,
+			company_name,
+			company_industry,
+			сompany_description,
+			writing_dna
+		from account_info
+		where user_id=$1;
+	`, userID)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		err := rows.Scan(
+			&res.Firstame,
+			&res.Lastname,
+			&res.WritingFor,
+			&res.Presentation,
+			&res.Industry,
+			&res.Description,
+			&res.CompanyName,
+			&res.CompanyIndustry,
+			&res.CompanyDescription,
+			&res.WritingDNA,
 		)
 		if err != nil {
 			return res, err
