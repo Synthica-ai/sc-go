@@ -369,15 +369,18 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 	}
 
 	rows, err := r.DB.QueryContext(r.Ctx, `
-		select id from generations  where
+		select id, created_at from generations  where
 			user_id=$1 AND created_at < $2 and status='succeeded' order by created_at desc limit 51;
 	`, filters.UserID, cursor)
 	if err != nil {
 		return nil, err
 	}
+
+	var createdAT time.Time
 	for rows.Next() {
 		var id uuid.UUID
-		err := rows.Scan(&id)
+
+		err := rows.Scan(&id, &createdAT)
 		if err != nil {
 			return nil, err
 		}
@@ -495,7 +498,9 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 	}
 
 	meta := &GenerationQueryWithOutputsMeta[*time.Time]{}
-	if len(gQueryResult) > per_page {
+	if len(gQueryResult) == 0 {
+		meta.Next = &createdAT
+	} else if len(genIndex) > per_page {
 		// Remove last item
 		gQueryResult = gQueryResult[:len(gQueryResult)-1]
 		meta.Next = &gQueryResult[len(gQueryResult)-1].CreatedAt
