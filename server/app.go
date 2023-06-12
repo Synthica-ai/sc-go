@@ -313,9 +313,6 @@ func main() {
 
 		// Create Generation
 		r.Post("/user/generation", hc.HandleCreateGeneration)
-
-		r.Patch("/user/account", hc.HandleUpdateAccount)
-		r.Get("/user/account", hc.HandleGetAccount)
 	})
 
 	// Routes that require authentication
