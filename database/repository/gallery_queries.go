@@ -28,6 +28,7 @@ func (r *Repository) RetrieveGalleryData(limit int, updatedAtGT *time.Time) ([]G
 	if updatedAtGT != nil {
 		query = query.Where(generationoutput.UpdatedAtGT(*updatedAtGT))
 	}
+	query = query.Where(generationoutput.DeletedAtIsNil())
 	err := query.Limit(limit).
 		Modify(func(s *sql.Selector) {
 			g := sql.Table(generation.Table)
