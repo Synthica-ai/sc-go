@@ -122,8 +122,11 @@ func (c *RestAPI) HandleNewAPIToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if newReq.Public == nil {
-		True := true
-		newReq.Public = &True
+		flag := false
+		if user.ActiveProductID == nil || *user.ActiveProductID == GetProductIDs()[1] {
+			flag = true
+		}
+		newReq.Public = &flag
 	}
 
 	if user.ActiveProductID == nil || *user.ActiveProductID == GetProductIDs()[1] {
