@@ -1114,6 +1114,11 @@ func (c *RestAPI) HandleDeleteGenerationOutputForUser(w http.ResponseWriter, r *
 		return
 	}
 
+	for _, id := range deleteReq.GenerationOutputIDs {
+		idStr := id.String()
+		c.Meili.Index("generation_g").DeleteDocument(idStr)
+	}
+
 	res := responses.DeletedResponse{
 		Deleted: count,
 	}
