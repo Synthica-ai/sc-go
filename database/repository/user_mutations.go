@@ -111,6 +111,65 @@ type UserSettings struct {
 	PublicMode      bool    `json:"public_mode"`
 }
 
+type AIFriends struct {
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Age          int    `json:"age"`
+	Eyes         string `json:"eyes"`
+	Hair         string `json:"hair"`
+	Height       string `json:"height"`
+	Occupation   string `json:"occupation"`
+	SiteProfile  string `json:"site_profile"`
+	ProfileImage string `json:"profile_image"`
+	Languages    string `json:"languages"`
+}
+
+// Update last_seen_at
+func (r *Repository) GetAIFriends(ctx context.Context) ([]AIFriends, error) {
+	res := make([]AIFriends, 0)
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			id,
+			name,
+			age,
+			eyes,
+			hair,
+			height,
+			occupation,
+			site_profile,
+			profile_image,
+			languages
+		from ai_friends;
+	`)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		var fr AIFriends
+		err := rows.Scan(
+			&fr.ID,
+			&fr.Name,
+			&fr.Age,
+			&fr.Eyes,
+			&fr.Hair,
+			&fr.Height,
+			&fr.Occupation,
+			&fr.SiteProfile,
+			&fr.ProfileImage,
+			&fr.Languages,
+		)
+		if err != nil {
+			return res, err
+		}
+
+		res = append(res, fr)
+	}
+
+	return res, nil
+}
+
 // Update last_seen_at
 func (r *Repository) GetUserSettings(id uuid.UUID, ctx context.Context) (UserSettings, error) {
 	var res UserSettings
