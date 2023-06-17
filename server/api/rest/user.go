@@ -572,13 +572,13 @@ type AskBodySettings struct {
 	Temperature int    `json:"temperature,omitempty"`
 	TopP        int    `json:"top_p,omitempty"`
 	Stream      *bool  `json:"stream"`
+	AIFriends   *int   `json:"ai_friends,omitempty"`
 }
 
 type AskBody struct {
 	AskBodyOpenAI
 
-	Settings  AskBodySettings `json:"settings,omitempty"`
-	AIFriends string          `json:"ai_friends,omitempty"`
+	Settings AskBodySettings `json:"settings,omitempty"`
 }
 
 type Message struct {
@@ -908,8 +908,8 @@ func (c *RestAPI) HandleAiChatAsk(p *httputil.ReverseProxy) func(http.ResponseWr
 		askBody.TopP = askBody.Settings.TopP
 
 		var friendCTX string
-		if askBody.AIFriends != "" {
-			friendCTX, err = c.Repo.GetAIFriendContext(askBody.AIFriends, r.Context())
+		if askBody.Settings.AIFriends != nil {
+			friendCTX, err = c.Repo.GetAIFriendContext(*askBody.Settings.AIFriends, r.Context())
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
