@@ -124,6 +124,36 @@ type AIFriends struct {
 	Languages    string `json:"languages"`
 }
 
+func (r *Repository) GetAIFriendContext(id string, ctx context.Context) (string, error) {
+	var res string
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			CONCAT(
+				context_you_are,
+				E'\n',
+				business_background,
+				E'\n',
+				(select context from ai_friends_policy limit 1)
+			)
+		from ai_friends where id=$1;
+	`, id)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		err := rows.Scan(
+			&res,
+		)
+		if err != nil {
+			return res, err
+		}
+	}
+
+	return res, nil
+}
+
 // Update last_seen_at
 func (r *Repository) GetAIFriends(ctx context.Context) ([]AIFriends, error) {
 	res := make([]AIFriends, 0)
