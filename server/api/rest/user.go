@@ -910,8 +910,8 @@ func (c *RestAPI) HandleAiChatAsk(p *httputil.ReverseProxy) func(http.ResponseWr
 		var friendCTX string
 		if askBody.Settings.AIFriends != "" {
 			friendCTX, err = c.Repo.GetAIFriendContext(askBody.Settings.AIFriends, r.Context())
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
+			if err != nil || friendCTX == "" {
+				http.Error(w, "Failed get ai friend context", http.StatusBadRequest)
 				return
 			}
 		}
