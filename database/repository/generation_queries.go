@@ -498,7 +498,7 @@ func (r *Repository) QueryGenerations(per_page int, cursor *time.Time, filters *
 	}
 
 	meta := &GenerationQueryWithOutputsMeta[*time.Time]{}
-	if len(gQueryResult) == 0 {
+	if len(gQueryResult) <= 1 {
 		meta.Next = &createdAT
 	} else if len(genIndex) > per_page {
 		// Remove last item
