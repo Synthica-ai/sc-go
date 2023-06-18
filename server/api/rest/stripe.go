@@ -137,6 +137,32 @@ func (c *RestAPI) HandleCreateCheckoutSession(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if user.StripeCustomerID == "" {
+		customer, err := c.StripeClient.Customers.New(&stripe.CustomerParams{
+			Email: stripe.String(user.Email),
+			Params: stripe.Params{
+				Metadata: map[string]string{
+					"supabase_id": (user.ID).String(),
+				},
+			},
+		})
+		if err != nil {
+			log.Error("Error creating stripe customer", "err", err)
+			return
+		}
+
+		// email, customer.ID, lastSignIn, client
+		err = c.Repo.UpdateUser(user.ID, map[string]interface{}{
+			"stripe_customer_id": customer.ID,
+		}, r.Context())
+		if err != nil {
+			log.Error("Error creating user", "err", err)
+			return
+		}
+
+		user.StripeCustomerID = customer.ID
+	}
+
 	// Get subscription
 	customer, err := c.StripeClient.Customers.Get(user.StripeCustomerID, &stripe.CustomerParams{
 		Params: stripe.Params{
