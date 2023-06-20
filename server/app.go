@@ -243,6 +243,9 @@ func main() {
 
 	s.Every(60).Seconds().Do(jobRunner.SyncMeili, jobs.NewJobLogger("MEILI_SYNC"), 100)
 
+	s.Every(5).Minutes().Do(jobRunner.RefundOldGenerationCredits, jobs.NewJobLogger("AUTO_REFUND"))
+	s.Every(60).Seconds().Do(jobRunner.AddFreeCreditsToEligibleUsers, jobs.NewJobLogger("FREE_CREDITS"))
+
 	// Create controller
 	apiTokenSmap := shared.NewSyncMap[chan requests.CogWebhookMessage]()
 	hc := rest.RestAPI{
