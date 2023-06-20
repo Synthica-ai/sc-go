@@ -128,15 +128,36 @@ func (r *Repository) GetAIFriendContext(id string, ctx context.Context) (string,
 	var res string
 
 	rows, err := r.DB.QueryContext(ctx, `
-		select
-			CONCAT(
-				context_you_are,
-				E'\n',
-				business_background,
-				E'\n',
-				(select context from ai_friends_policy limit 1)
-			)
-		from ai_friends where id=$1;
+	select
+		CONCAT(
+			(CASE WHEN name IS NULL OR name = '' THEN '' ELSE CONCAT('Your name is: ', name, E'\n') END),
+			(CASE WHEN age IS NULL THEN '' ELSE CONCAT('You are: ', age, ' years old', E'\n') END),
+			(CASE WHEN gender IS NULL OR gender = '' THEN '' ELSE CONCAT('You are: ', gender, E'\n') END),
+			(CASE WHEN occupation IS NULL OR occupation = '' THEN '' ELSE CONCAT('Your occupation is: ', occupation, E'\n') END),
+			(CASE WHEN education IS NULL OR education = '' THEN '' ELSE CONCAT('Your education is: ', education, E'\n') END),
+			(CASE WHEN hobbies IS NULL OR hobbies = '' THEN '' ELSE CONCAT('Your favorite hobbies are ', hobbies, E'\n') END),
+			(CASE WHEN business_interests IS NULL OR business_interests = '' THEN '' ELSE CONCAT('Your business interests include ', business_interests, E'\n') END),
+			(CASE WHEN religion IS NULL OR religion = '' THEN '' ELSE CONCAT('You practice the ', religion,  ' religion. ', E'\n') END),
+			(CASE WHEN relationship IS NULL OR relationship = '' THEN '' ELSE CONCAT('Your current relationship status is ', relationship, '. ', E'\n') END),
+			(CASE WHEN zodiac IS NULL OR zodiac = '' THEN '' ELSE CONCAT('You are a ', zodiac, ', according to your zodiac sign. ', E'\n') END),
+			(CASE WHEN music IS NULL OR music = '' THEN '' ELSE CONCAT('You enjoy listening to ', music, E'\n') END),
+			(CASE WHEN movie IS NULL OR movie = '' THEN '' ELSE CONCAT('You enjoy watching ', movie,  ' movies. ', E'\n') END),
+			(CASE WHEN cooking IS NULL OR cooking = '' THEN '' ELSE CONCAT('In cooking, you love ', cooking, '. ', E'\n') END),
+			(CASE WHEN social_account IS NULL OR social_account = '' THEN '' ELSE CONCAT('You love using ', social_account, '. ', E'\n') END),
+			(CASE WHEN hair IS NULL OR eyes IS NULL THEN '' ELSE CONCAT('You have ', hair,  ' hair and ', eyes,  ' eyes. ', E'\n') END),
+			(CASE WHEN body_type IS NULL OR body_type = '' THEN '' ELSE CONCAT('Your body type is ', body_type, '. ', E'\n') END),
+			(CASE WHEN height_ft_in IS NULL OR height_ft_in = '' THEN '' ELSE CONCAT('You are ', height_ft_in,  ' in height. ', E'\n') END),
+			(CASE WHEN smoking IS NULL OR smoking = '' THEN '' ELSE CONCAT('You ', smoking,  ' smoke. ', E'\n') END),
+			(CASE WHEN drinking IS NULL OR drinking = '' THEN '' ELSE CONCAT('You ', drinking,  ' drink alcohol. ', E'\n') END),
+			(CASE WHEN home_town IS NULL OR home_town = '' THEN '' ELSE CONCAT('You live in ', home_town, E'\n') END),
+			(CASE WHEN business_personality IS NULL OR business_personality = '' THEN '' ELSE CONCAT('Your business personality is ', business_personality, '. ', E'\n') END),
+			context_you_are,
+			E'\n',
+			business_background,
+			E'\n',
+			(select context from ai_friends_policy limit 1)
+		)
+	from ai_friends where id=$1;
 	`, id)
 	if err != nil {
 		return res, err
