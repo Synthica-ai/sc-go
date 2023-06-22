@@ -112,16 +112,17 @@ type UserSettings struct {
 }
 
 type AIFriends struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Age          int    `json:"age"`
-	Eyes         string `json:"eyes"`
-	Hair         string `json:"hair"`
-	Height       string `json:"height"`
-	Occupation   string `json:"occupation"`
-	SiteProfile  string `json:"site_profile"`
-	ProfileImage string `json:"profile_image"`
-	Languages    string `json:"languages"`
+	ID           int     `json:"id"`
+	Name         *string `json:"name"`
+	Age          *int    `json:"age"`
+	Eyes         *string `json:"eyes"`
+	Hair         *string `json:"hair"`
+	Height       *string `json:"height"`
+	Occupation   *string `json:"occupation"`
+	SiteProfile  *string `json:"site_profile"`
+	ProfileImage *string `json:"profile_image"`
+	Languages    *string `json:"languages"`
+	VoiceID      *string `json:"voice_id"`
 }
 
 func (r *Repository) GetAIFriendContext(id string, ctx context.Context) (string, error) {
@@ -186,11 +187,12 @@ func (r *Repository) GetAIFriends(ctx context.Context) ([]AIFriends, error) {
 			age,
 			eyes,
 			hair,
-			height,
+			height_ft_in,
 			occupation,
 			site_profile,
 			profile_image,
-			languages
+			languages,
+			voice_id
 		from ai_friends;
 	`)
 	if err != nil {
@@ -210,6 +212,7 @@ func (r *Repository) GetAIFriends(ctx context.Context) ([]AIFriends, error) {
 			&fr.SiteProfile,
 			&fr.ProfileImage,
 			&fr.Languages,
+			&fr.VoiceID,
 		)
 		if err != nil {
 			return res, err
