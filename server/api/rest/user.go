@@ -928,14 +928,14 @@ func (c *RestAPI) HandleAiChatAsk(p *httputil.ReverseProxy) func(http.ResponseWr
 				if friendCTX == "" {
 					askBody.Messages[i].Content = defaultContext + askBody.Messages[i].Content
 				} else {
-					askBody.Messages[i].Content = friendCTX + askBody.Messages[i].Content
+					askBody.Messages[i].Content = defaultContext + friendCTX + askBody.Messages[i].Content
 				}
 			}
 		}
 
 		contextSystem := ""
 		if !contextSetted {
-			contextSystem = friendCTX
+			contextSystem = defaultContext + friendCTX
 			if friendCTX == "" {
 				contextSystem = defaultContext
 			}
