@@ -125,6 +125,20 @@ type AIFriends struct {
 	VoiceID      *string `json:"voice_id"`
 }
 
+type AIInfluencer struct {
+	ID           int     `json:"id"`
+	Name         *string `json:"name"`
+	Age          *int    `json:"age"`
+	Eyes         *string `json:"eyes"`
+	Hair         *string `json:"hair"`
+	Height       *string `json:"height"`
+	Occupation   *string `json:"occupation"`
+	Description  *string `json:"description"`
+	ProfileImage *string `json:"profile_image"`
+	Languages    *string `json:"languages"`
+	VoiceID      *string `json:"voice_id"`
+}
+
 func (r *Repository) GetAIFriendContext(id string, ctx context.Context) (string, error) {
 	var res string
 
@@ -210,6 +224,54 @@ func (r *Repository) GetAIFriends(ctx context.Context) ([]AIFriends, error) {
 			&fr.Height,
 			&fr.Occupation,
 			&fr.SiteProfile,
+			&fr.ProfileImage,
+			&fr.Languages,
+			&fr.VoiceID,
+		)
+		if err != nil {
+			return res, err
+		}
+
+		res = append(res, fr)
+	}
+
+	return res, nil
+}
+
+// Update last_seen_at
+func (r *Repository) GetAIInfluencer(ctx context.Context) ([]AIInfluencer, error) {
+	res := make([]AIInfluencer, 0)
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			id,
+			name,
+			age,
+			eyes,
+			hair,
+			height_ft_in,
+			occupation,
+			description,
+			profile_image,
+			languages,
+			voice_id
+		from ai_influencer;
+	`)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		var fr AIInfluencer
+		err := rows.Scan(
+			&fr.ID,
+			&fr.Name,
+			&fr.Age,
+			&fr.Eyes,
+			&fr.Hair,
+			&fr.Height,
+			&fr.Occupation,
+			&fr.Description,
 			&fr.ProfileImage,
 			&fr.Languages,
 			&fr.VoiceID,

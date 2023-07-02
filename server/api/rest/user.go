@@ -169,6 +169,17 @@ func (c *RestAPI) HandleGetAIFriends(w http.ResponseWriter, r *http.Request) {
 	render.Status(r, http.StatusOK)
 }
 
+func (c *RestAPI) HandleGetAIInfluencer(w http.ResponseWriter, r *http.Request) {
+	data, err := c.Repo.GetAIInfluencer(r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.JSON(w, r, data)
+	render.Status(r, http.StatusOK)
+}
+
 func (c *RestAPI) HandleGetAccount(w http.ResponseWriter, r *http.Request) {
 	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
 	if userID == nil || email == "" {
