@@ -158,6 +158,170 @@ func (c *RestAPI) HandleGetUserSettings(w http.ResponseWriter, r *http.Request) 
 	render.Status(r, http.StatusOK)
 }
 
+func (c *RestAPI) HandleGetAIVoices(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	if id == "" {
+		data, err := c.Repo.GetAIVoices(*userID, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+			return
+		}
+		render.JSON(w, r, data)
+	} else {
+		data, err := c.Repo.GetAIVoice(*userID, id, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+			return
+		}
+		render.JSON(w, r, data)
+	}
+	render.Status(r, http.StatusOK)
+}
+
+func (c *RestAPI) HandleGetAIVoiceSettings(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	if id == "" {
+		data, err := c.Repo.GetAIVoiceSettings(*userID, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+			return
+		}
+		render.JSON(w, r, data)
+	} else {
+		data, err := c.Repo.GetAIVoiceSetting(*userID, id, r.Context())
+		if err != nil {
+			responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+			return
+		}
+		render.JSON(w, r, data)
+	}
+	render.Status(r, http.StatusOK)
+}
+
+func (c *RestAPI) HandleInsertAIVoice(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var payload repository.Voice
+	err := json.Unmarshal(reqBody, &payload)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	payload.UserID = *userID
+
+	err = c.Repo.InsertAIVoice(r.Context(), payload)
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
+func (c *RestAPI) HandleInsertAIVoiceSettings(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var payload repository.VoiceSettings
+	err := json.Unmarshal(reqBody, &payload)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	payload.UserID = *userID
+
+	err = c.Repo.InsertAIVoiceSettings(r.Context(), payload)
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
+func (c *RestAPI) HandleUpdateAIVoice(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		responses.ErrBadRequest(w, r, "id parameter is requered", "")
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var data map[string]interface{}
+	err := json.Unmarshal(reqBody, &data)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	err = c.Repo.UpdateAIVoice(*userID, id, data, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
+func (c *RestAPI) HandleUpdateAIVoiceSettings(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		responses.ErrBadRequest(w, r, "id parameter is requered", "")
+		return
+	}
+
+	// Parse request body
+	reqBody, _ := io.ReadAll(r.Body)
+	var data map[string]interface{}
+	err := json.Unmarshal(reqBody, &data)
+	if err != nil {
+		responses.ErrUnableToParseJson(w, r)
+		return
+	}
+
+	err = c.Repo.UpdateAIVoiceSettings(*userID, id, data, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
 func (c *RestAPI) HandleGetAIFriends(w http.ResponseWriter, r *http.Request) {
 	data, err := c.Repo.GetAIFriends(r.Context())
 	if err != nil {

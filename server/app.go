@@ -394,6 +394,24 @@ func main() {
 			// Get user summary
 			r.Get("/", hc.HandleGetUser)
 
+			r.Route("/ai_voice", func(r chi.Router) {
+				r.Use(middleware.Logger)
+				// 20 requests per second
+				r.Use(mw.RateLimit(20, "srv", 1*time.Second))
+				r.Get("/", hc.HandleGetAIVoices)
+				r.Post("/", hc.HandleInsertAIVoice)
+				r.Patch("/", hc.HandleUpdateAIVoice)
+			})
+
+			r.Route("/ai_voice_settings", func(r chi.Router) {
+				r.Use(middleware.Logger)
+				// 20 requests per second
+				r.Use(mw.RateLimit(20, "srv", 1*time.Second))
+				r.Get("/", hc.HandleGetAIVoiceSettings)
+				r.Post("/", hc.HandleInsertAIVoiceSettings)
+				r.Patch("/", hc.HandleUpdateAIVoiceSettings)
+			})
+
 			r.Patch("/", hc.HandleUpdateUser)
 
 			// Create Generation

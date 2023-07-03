@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -79,6 +80,162 @@ func (r *Repository) UpdateAccount(userID uuid.UUID, data map[string]interface{}
 
 	_, err := r.DB.ExecContext(ctx, query, args...)
 	return err
+}
+
+func (r *Repository) UpdateAIVoice(userID uuid.UUID, id string, data map[string]interface{}, ctx context.Context) error {
+	sqlBuilder := PsqlBuilder.Update("ai_voices").Where(sq.Eq{"user_id": userID, "id": id})
+
+	_, sqlBuilder = SetJsonbMapAndReturnColumns(sqlBuilder, data)
+
+	query, args, _ := sqlBuilder.ToSql()
+
+	_, err := r.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (r *Repository) UpdateAIVoiceSettings(userID uuid.UUID, id string, data map[string]interface{}, ctx context.Context) error {
+	sqlBuilder := PsqlBuilder.Update("ai_voice_settings").Where(sq.Eq{"user_id": userID, "id": id})
+
+	_, sqlBuilder = SetJsonbMapAndReturnColumns(sqlBuilder, data)
+
+	query, args, _ := sqlBuilder.ToSql()
+
+	_, err := r.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (r *Repository) InsertAIVoice(ctx context.Context, data Voice) error {
+	_, err := r.DB.ExecContext(ctx, `
+		INSERT INTO ai_voices(
+			voice_id,
+			name,
+			samples,
+			category,
+			model_id,
+			language,
+			is_allowed_to_fine_tune,
+			fine_tuning_requested,
+			finetuning_state,
+			verification_attempts,
+			verification_failures,
+			verification_attempts_count,
+			slice_ids,
+			manual_verification,
+			manual_verification_requested,
+			labels,
+			description,
+			preview_url,
+			available_for_tiers,
+			settings,
+			sharing,
+			user_id
+		) VALUES (
+			$1,
+			$2,
+			$3,
+			$4,
+			$5,
+			$6,
+			$7,
+			$8,
+			$9,
+			$10,
+			$11,
+			$12,
+			$13,
+			$14,
+			$15,
+			$16,
+			$17,
+			$18,
+			$19,
+			$20,
+			$21,
+			$22
+		)
+	`,
+		data.VoiceID,
+		data.Name,
+		data.Samples,
+		data.Category,
+		data.ModelID,
+		data.Language,
+		data.IsAllowedToFineTune,
+		data.FineTuningRequested,
+		data.FinetuningState,
+		data.VerificationAttempts,
+		data.VerificationFailures,
+		data.VerificationAttemptsCount,
+		data.SliceIds,
+		data.ManualVerification,
+		data.ManualVerificationRequested,
+		data.Labels,
+		data.Description,
+		data.PreviewURL,
+		data.AvailableForTiers,
+		data.Settings,
+		data.Sharing,
+		data.UserID,
+	)
+
+	return err
+}
+
+func (r *Repository) InsertAIVoiceSettings(ctx context.Context, data VoiceSettings) error {
+	_, err := r.DB.ExecContext(ctx, `
+		INSERT INTO ai_voice_settings(
+			voice_id,
+			stability,
+			similarity_boost,
+			user_id
+		) VALUES (
+			$1,
+			$2,
+			$3,
+			$4
+		)
+	`,
+		data.VoiceID,
+		data.Stability,
+		data.SimilarityBoost,
+		data.UserID,
+	)
+
+	return err
+}
+
+type Voice struct {
+	Id                          int       `json:"id"`
+	VoiceID                     string    `json:"voice_id"`
+	Name                        string    `json:"name"`
+	Samples                     string    `json:"samples"`
+	Category                    string    `json:"category"`
+	ModelID                     string    `json:"model_id"`
+	Language                    string    `json:"language"`
+	IsAllowedToFineTune         bool      `json:"is_allowed_to_fine_tune"`
+	FineTuningRequested         bool      `json:"fine_tuning_requested"`
+	FinetuningState             string    `json:"finetuning_state"`
+	VerificationAttempts        int64     `json:"verification_attempts"`
+	VerificationFailures        string    `json:"verification_failures"`
+	VerificationAttemptsCount   int64     `json:"verification_attempts_count"`
+	SliceIds                    string    `json:"slice_ids"`
+	ManualVerification          string    `json:"manual_verification"`
+	ManualVerificationRequested bool      `json:"manual_verification_requested"`
+	Labels                      string    `json:"labels"`
+	Description                 string    `json:"description"`
+	PreviewURL                  string    `json:"preview_url"`
+	AvailableForTiers           string    `json:"available_for_tiers"`
+	Settings                    string    `json:"settings"`
+	Sharing                     string    `json:"sharing"`
+	UserID                      uuid.UUID `json:"user_id"`
+}
+
+type VoiceSettings struct {
+	Id              int       `json:"id"`
+	VoiceID         int       `json:"voice_id"`
+	Stability       float64   `json:"stability"`
+	SimilarityBoost float64   `json:"similarity_boost"`
+	UserID          uuid.UUID `json:"user_id"`
 }
 
 type Account struct {
@@ -233,6 +390,214 @@ func (r *Repository) GetAIFriends(ctx context.Context) ([]AIFriends, error) {
 		}
 
 		res = append(res, fr)
+	}
+
+	return res, nil
+}
+
+func (r *Repository) GetAIVoices(userID uuid.UUID, ctx context.Context) ([]Voice, error) {
+	res := make([]Voice, 0)
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			id,
+			voice_id,
+			name,
+			samples,
+			category,
+			model_id,
+			language,
+			is_allowed_to_fine_tune,
+			fine_tuning_requested,
+			finetuning_state,
+			verification_attempts,
+			verification_failures,
+			verification_attempts_count,
+			slice_ids,
+			manual_verification,
+			manual_verification_requested,
+			labels,
+			description,
+			preview_url,
+			available_for_tiers,
+			settings,
+			sharing,
+			user_id
+		from ai_voices where user_id=$1;
+	`, userID)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		var v Voice
+		err := rows.Scan(
+			&v.Id,
+			&v.VoiceID,
+			&v.Name,
+			&v.Samples,
+			&v.Category,
+			&v.ModelID,
+			&v.Language,
+			&v.IsAllowedToFineTune,
+			&v.FineTuningRequested,
+			&v.FinetuningState,
+			&v.VerificationAttempts,
+			&v.VerificationFailures,
+			&v.VerificationAttemptsCount,
+			&v.SliceIds,
+			&v.ManualVerification,
+			&v.ManualVerificationRequested,
+			&v.Labels,
+			&v.Description,
+			&v.PreviewURL,
+			&v.AvailableForTiers,
+			&v.Settings,
+			&v.Sharing,
+			&v.UserID,
+		)
+		if err != nil {
+			return res, err
+		}
+
+		res = append(res, v)
+	}
+
+	return res, nil
+}
+
+func (r *Repository) GetAIVoice(userID uuid.UUID, id string, ctx context.Context) (Voice, error) {
+	var res Voice
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			id,
+			voice_id,
+			name,
+			samples,
+			category,
+			model_id,
+			language,
+			is_allowed_to_fine_tune,
+			fine_tuning_requested,
+			finetuning_state,
+			verification_attempts,
+			verification_failures,
+			verification_attempts_count,
+			slice_ids,
+			manual_verification,
+			manual_verification_requested,
+			labels,
+			description,
+			preview_url,
+			available_for_tiers,
+			settings,
+			sharing,
+			user_id
+		from ai_voices where user_id=$1 and id=$2;
+	`, userID, id)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		err := rows.Scan(
+			&res.Id,
+			&res.VoiceID,
+			&res.Name,
+			&res.Samples,
+			&res.Category,
+			&res.ModelID,
+			&res.Language,
+			&res.IsAllowedToFineTune,
+			&res.FineTuningRequested,
+			&res.FinetuningState,
+			&res.VerificationAttempts,
+			&res.VerificationFailures,
+			&res.VerificationAttemptsCount,
+			&res.SliceIds,
+			&res.ManualVerification,
+			&res.ManualVerificationRequested,
+			&res.Labels,
+			&res.Description,
+			&res.PreviewURL,
+			&res.AvailableForTiers,
+			&res.Settings,
+			&res.Sharing,
+			&res.UserID,
+		)
+		if err != nil {
+			return res, err
+		}
+
+		return res, nil
+	}
+
+	return res, errors.New("Not found")
+}
+
+func (r *Repository) GetAIVoiceSettings(userID uuid.UUID, ctx context.Context) ([]VoiceSettings, error) {
+	res := make([]VoiceSettings, 0)
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			id,
+			voice_id,
+			round(stability * 1000000) / 1000000,
+			round(similarity_boost * 1000000) / 1000000,
+			user_id
+		from ai_voice_settings where user_id=$1;
+	`, userID)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		var v VoiceSettings
+		err := rows.Scan(
+			&v.Id,
+			&v.VoiceID,
+			&v.Stability,
+			&v.SimilarityBoost,
+			&v.UserID,
+		)
+		if err != nil {
+			return res, err
+		}
+
+		res = append(res, v)
+	}
+
+	return res, nil
+}
+
+func (r *Repository) GetAIVoiceSetting(userID uuid.UUID, id string, ctx context.Context) (VoiceSettings, error) {
+	var res VoiceSettings
+
+	rows, err := r.DB.QueryContext(ctx, `
+		select
+			id,
+			voice_id,
+			stability,
+			similarity_boost,
+			user_id
+		from ai_voice_settings where user_id=$1 AND id=$1;
+	`, userID)
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		err := rows.Scan(
+			&res.Id,
+			&res.VoiceID,
+			&res.Stability,
+			&res.SimilarityBoost,
+			&res.UserID,
+		)
+		if err != nil {
+			return res, err
+		}
 	}
 
 	return res, nil
