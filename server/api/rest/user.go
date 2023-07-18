@@ -292,6 +292,27 @@ func (c *RestAPI) HandleUpdateAIVoice(w http.ResponseWriter, r *http.Request) {
 	render.Status(r, http.StatusOK)
 }
 
+func (c *RestAPI) HandleDeleteAIVoice(w http.ResponseWriter, r *http.Request) {
+	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
+	if userID == nil || email == "" {
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		responses.ErrBadRequest(w, r, "id parameter is requered", "")
+		return
+	}
+
+	err := c.Repo.DeleteAIVoice(*userID, id, r.Context())
+	if err != nil {
+		responses.ErrInternalServerError(w, r, "An unknown error has occurred")
+		return
+	}
+
+	render.Status(r, http.StatusOK)
+}
+
 func (c *RestAPI) HandleUpdateAIVoiceSettings(w http.ResponseWriter, r *http.Request) {
 	userID, email := c.GetUserIDAndEmailIfAuthenticated(w, r)
 	if userID == nil || email == "" {

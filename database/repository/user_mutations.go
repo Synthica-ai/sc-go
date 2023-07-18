@@ -93,6 +93,11 @@ func (r *Repository) UpdateAIVoice(userID uuid.UUID, id string, data map[string]
 	return err
 }
 
+func (r *Repository) DeleteAIVoice(userID uuid.UUID, id string, ctx context.Context) error {
+	_, err := r.DB.ExecContext(ctx, "DELETE FROM ai_voices where id=$1 AND user_id=$2", id, userID)
+	return err
+}
+
 func (r *Repository) UpdateAIVoiceSettings(userID uuid.UUID, id string, data map[string]interface{}, ctx context.Context) error {
 	sqlBuilder := PsqlBuilder.Update("ai_voice_settings").Where(sq.Eq{"user_id": userID, "id": id})
 

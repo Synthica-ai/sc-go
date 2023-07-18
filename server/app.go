@@ -401,6 +401,7 @@ func main() {
 				r.Get("/", hc.HandleGetAIVoices)
 				r.Post("/", hc.HandleInsertAIVoice)
 				r.Patch("/", hc.HandleUpdateAIVoice)
+				r.Delete("/", hc.HandleDeleteAIVoice)
 			})
 
 			r.Route("/ai_voice_settings", func(r chi.Router) {
