@@ -501,6 +501,14 @@ func main() {
 		})
 
 		// Api token route
+		r.Route("/upload", func(r chi.Router) {
+			r.Use(mw.AuthMiddleware(middleware.AuthLevelAPIToken))
+			r.Use(middleware.Logger)
+			r.Use(mw.RateLimit(2, "srv", 1*time.Second))
+			r.Post("/", hu.HandleUpload)
+		})
+
+		// Api token route
 		r.Route("/generate_similar", func(r chi.Router) {
 			r.Use(mw.AuthMiddleware(middleware.AuthLevelAPIToken))
 			r.Use(middleware.Logger)
