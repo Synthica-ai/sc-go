@@ -183,7 +183,7 @@ func (r *Repository) InsertAIVoice(ctx context.Context, data Voice) error {
 		data.Settings,
 		data.Sharing,
 		data.UserID,
-		data.PublicVoice
+		data.PublicVoice,
 	)
 
 	return err
