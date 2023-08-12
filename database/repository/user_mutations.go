@@ -133,7 +133,8 @@ func (r *Repository) InsertAIVoice(ctx context.Context, data Voice) error {
 			available_for_tiers,
 			settings,
 			sharing,
-			user_id
+			user_id,
+			public_voice
 		) VALUES (
 			$1,
 			$2,
@@ -156,7 +157,8 @@ func (r *Repository) InsertAIVoice(ctx context.Context, data Voice) error {
 			$19,
 			$20,
 			$21,
-			$22
+			$22,
+			$23
 		)
 	`,
 		data.VoiceID,
@@ -181,6 +183,7 @@ func (r *Repository) InsertAIVoice(ctx context.Context, data Voice) error {
 		data.Settings,
 		data.Sharing,
 		data.UserID,
+		data.PublicVoice
 	)
 
 	return err
@@ -233,6 +236,7 @@ type Voice struct {
 	Settings                    string    `json:"settings"`
 	Sharing                     string    `json:"sharing"`
 	UserID                      uuid.UUID `json:"user_id"`
+	PublicVoice                 bool	  `json:"public_voice"`
 }
 
 type VoiceSettings struct {
@@ -427,7 +431,8 @@ func (r *Repository) GetAIVoices(userID uuid.UUID, ctx context.Context) ([]Voice
 			available_for_tiers,
 			settings,
 			sharing,
-			user_id
+			user_id,
+			public_voice
 		from ai_voices where user_id=$1;
 	`, userID)
 	if err != nil {
@@ -498,7 +503,8 @@ func (r *Repository) GetAIVoice(userID uuid.UUID, id string, ctx context.Context
 			available_for_tiers,
 			settings,
 			sharing,
-			user_id
+			user_id,
+			public_voice
 		from ai_voices where user_id=$1 and id=$2;
 	`, userID, id)
 	if err != nil {
@@ -530,6 +536,7 @@ func (r *Repository) GetAIVoice(userID uuid.UUID, id string, ctx context.Context
 			&res.Settings,
 			&res.Sharing,
 			&res.UserID,
+			&res.PublicVoice,
 		)
 		if err != nil {
 			return res, err
