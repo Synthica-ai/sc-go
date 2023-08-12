@@ -431,6 +431,7 @@ func (r *Repository) GetAIVoices(userID uuid.UUID, ctx context.Context) ([]Voice
 			available_for_tiers,
 			settings,
 			sharing,
+			public_voice,
 			user_id
 		from ai_voices where user_id=$1;
 	`, userID)
