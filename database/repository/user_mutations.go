@@ -431,8 +431,8 @@ func (r *Repository) GetAIVoices(userID uuid.UUID, ctx context.Context) ([]Voice
 			available_for_tiers,
 			settings,
 			sharing,
-			public_voice,
-			user_id
+			user_id,
+			public_voice
 		from ai_voices where user_id=$1;
 	`, userID)
 	if err != nil {
@@ -465,6 +465,7 @@ func (r *Repository) GetAIVoices(userID uuid.UUID, ctx context.Context) ([]Voice
 			&v.Settings,
 			&v.Sharing,
 			&v.UserID,
+			&v.PublicVoice,
 		)
 		if err != nil {
 			return res, err
