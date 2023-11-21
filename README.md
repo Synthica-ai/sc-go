@@ -1,6 +1,6 @@
 
 # stablecog/sc-go
-
+ 
 This is a multi-module workspace of various GO applications and packages used by [Stablecog](https://stablecog.com).
 
 Reference the appendix section for an index of the various projects and repositories.
