@@ -53,6 +53,10 @@ func GetCorsOrigins() []string {
 			"https://google.com/",
 			"http://localhost:5500/",
 			"http://localhost:5500",
+			"http://synthica.love",
+			"http://www.synthica.love",
+			"https://synthica.love",
+			"https://www.synthica.love",
 		}
 	}
 	return []string{
@@ -67,5 +71,9 @@ func GetCorsOrigins() []string {
 		"https://google.com/",
 		"http://localhost:5500/",
 		"http://localhost:5500",
+		"http://synthica.love",
+		"http://www.synthica.love",
+		"https://synthica.love",
+		"https://www.synthica.love",
 	}
 }
